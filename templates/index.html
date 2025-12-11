@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+
+{% block title %}Home - Online Voting System{% endblock %}
+
+{% block content %}
+<!-- Hero Banner -->
+<div class="row mb-5">
+    <div class="col-12">
+        <div class="card border-0 hero-image">
+            <img src="{{ url_for('static', filename='images/hero-banner.svg') }}" 
+                 class="card-img-top rounded" 
+                 alt="Online Voting System Hero Banner"
+                 style="max-height: 400px; object-fit: cover;">
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-12 text-center mb-5">
+        <h1 class="display-4">Welcome to Online Voting System</h1>
+        <p class="lead">Secure, Transparent, and Easy to Use</p>
+    </div>
+</div>
+
+<div class="row mb-5">
+    <div class="col-md-4">
+        <div class="card text-center h-100 border-0 shadow-sm">
+            <div class="card-body">
+                <img src="{{ url_for('static', filename='images/secure-icon.svg') }}" 
+                     alt="Secure" class="mb-3" style="width: 100px; height: 100px;">
+                <h5 class="card-title mt-3">Secure</h5>
+                <p class="card-text">Your vote is encrypted and protected with state-of-the-art security.</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card text-center h-100 border-0 shadow-sm">
+            <div class="card-body">
+                <img src="{{ url_for('static', filename='images/transparent-icon.svg') }}" 
+                     alt="Transparent" class="mb-3" style="width: 100px; height: 100px;">
+                <h5 class="card-title mt-3">Transparent</h5>
+                <p class="card-text">Real-time results and complete transparency in the voting process.</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card text-center h-100 border-0 shadow-sm">
+            <div class="card-body">
+                <img src="{{ url_for('static', filename='images/vote-icon.svg') }}" 
+                     alt="Easy to Use" class="mb-3" style="width: 100px; height: 100px;">
+                <h5 class="card-title mt-3">Easy</h5>
+                <p class="card-text">Simple and intuitive interface for all users.</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-12">
+        <h2 class="mb-4">Active Elections</h2>
+        {% if elections %}
+            <div class="row">
+                {% for election in elections %}
+                    <div class="col-md-6 mb-4">
+                        <div class="card">
+                            <div class="card-body">
+                                <h5 class="card-title">{{ election.title }}</h5>
+                                <p class="card-text">{{ election.description or 'No description available' }}</p>
+                                <p class="text-muted">
+                                    <small>
+                                        <i class="bi bi-calendar"></i> 
+                                        {{ election.start_date.strftime('%Y-%m-%d %H:%M') }} to 
+                                        {{ election.end_date.strftime('%Y-%m-%d %H:%M') }}
+                                    </small>
+                                </p>
+                                <span class="badge bg-{{ 'success' if election.status == 'active' else 'secondary' if election.status == 'upcoming' else 'danger' }}">
+                                    {{ election.status.upper() }}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <div class="alert alert-info">
+                <i class="bi bi-info-circle"></i> No elections available at the moment.
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+<div class="row mt-5">
+    <div class="col-md-6 offset-md-3 text-center">
+        <div class="card bg-light">
+            <div class="card-body">
+                <h4>Ready to Vote?</h4>
+                <p>Register now or login to cast your vote!</p>
+                <a href="{{ url_for('voter_register') }}" class="btn btn-primary me-2">Register</a>
+                <a href="{{ url_for('voter_login') }}" class="btn btn-outline-primary">Login</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

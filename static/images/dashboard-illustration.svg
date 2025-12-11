@@ -1,0 +1,32 @@
+<svg width="400" height="300" viewBox="0 0 400 300" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="dashGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0d6efd;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#6610f2;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Background circles -->
+  <circle cx="350" cy="50" r="40" fill="#0d6efd" fill-opacity="0.05"/>
+  <circle cx="50" cy="250" r="50" fill="#6610f2" fill-opacity="0.05"/>
+  
+  <!-- Main ballot box -->
+  <rect x="120" y="100" width="160" height="140" rx="8" fill="white" stroke="url(#dashGrad)" stroke-width="4"/>
+  <rect x="160" y="70" width="80" height="50" rx="4" fill="white" stroke="url(#dashGrad)" stroke-width="4"/>
+  
+  <!-- Check mark on paper -->
+  <path d="M175 90 L185 105 L210 80" stroke="#198754" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  
+  <!-- Ballot papers inside -->
+  <rect x="140" y="130" width="120" height="12" rx="2" fill="url(#dashGrad)" fill-opacity="0.2"/>
+  <rect x="140" y="152" width="120" height="12" rx="2" fill="url(#dashGrad)" fill-opacity="0.2"/>
+  <rect x="140" y="174" width="120" height="12" rx="2" fill="url(#dashGrad)" fill-opacity="0.2"/>
+  <rect x="140" y="196" width="120" height="12" rx="2" fill="url(#dashGrad)" fill-opacity="0.2"/>
+  
+  <!-- Decorative elements -->
+  <circle cx="80" cy="120" r="30" fill="none" stroke="#ffc107" stroke-width="3"/>
+  <path d="M80 100 L85 110 L95 110 L87 116 L90 126 L80 120 L70 126 L73 116 L65 110 L75 110 Z" fill="#ffc107"/>
+  
+  <circle cx="320" cy="180" r="30" fill="none" stroke="#20c997" stroke-width="3"/>
+  <path d="M310 175 L318 183 L335 166" stroke="#20c997" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

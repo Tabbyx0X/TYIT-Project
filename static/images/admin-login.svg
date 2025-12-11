@@ -1,0 +1,21 @@
+<svg width="300" height="300" viewBox="0 0 300 300" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="adminGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0d6efd;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#6610f2;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <circle cx="150" cy="150" r="140" fill="url(#adminGrad)" fill-opacity="0.1"/>
+  
+  <!-- Shield outline -->
+  <path d="M150 50 L100 80 L100 150 Q100 200 150 230 Q200 200 200 150 L200 80 Z" 
+        fill="none" stroke="url(#adminGrad)" stroke-width="6"/>
+  
+  <!-- User icon in shield -->
+  <circle cx="150" cy="125" r="25" fill="url(#adminGrad)"/>
+  <path d="M110 185 Q150 165 190 185 L190 210 L110 210 Z" fill="url(#adminGrad)"/>
+  
+  <!-- Star badge -->
+  <path d="M150 65 L155 78 L169 78 L158 86 L162 99 L150 91 L138 99 L142 86 L131 78 L145 78 Z" 
+        fill="#ffc107"/>
+</svg>

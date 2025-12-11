@@ -1,0 +1,46 @@
+{% extends 'base.html' %}
+
+{% block title %}Voter Login{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center mt-5">
+    <div class="col-md-6 col-lg-4">
+        <div class="card shadow">
+            <div class="card-body p-5">
+                <div class="text-center mb-4">
+                    <img src="{{ url_for('static', filename='images/voter-login.svg') }}" 
+                         alt="Voter Login" style="width: 120px; height: 120px;" class="mb-3">
+                    <h3 class="card-title">Voter Login</h3>
+                    <p class="text-muted">Login to cast your vote</p>
+                </div>
+                
+                <form method="POST">
+                    <div class="mb-3">
+                        <label for="voter_id" class="form-label">Voter ID</label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="fas fa-id-card"></i></span>
+                            <input type="text" class="form-control" id="voter_id" name="voter_id" required>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <label for="password" class="form-label">Password</label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="fas fa-lock"></i></span>
+                            <input type="password" class="form-control" id="password" name="password" required>
+                        </div>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary w-100 mb-3">
+                        <i class="fas fa-sign-in-alt"></i> Login
+                    </button>
+                    
+                    <div class="text-center">
+                        <small>Don't have an account? <a href="{{ url_for('voter_register') }}">Register here</a></small>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
