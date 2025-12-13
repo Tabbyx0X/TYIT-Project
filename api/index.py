@@ -1,5 +1,5 @@
 from app import app
 
-# Vercel serverless function handler
-def handler(event, context):
-    return app(event, context)
+# Export the Flask app as the Vercel handler
+# Vercel's Python runtime will automatically call this
+app = app
