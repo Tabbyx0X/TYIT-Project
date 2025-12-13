@@ -6,8 +6,8 @@ from datetime import datetime
 from config import Config
 import os
 
-# Disable instance folder for serverless (Vercel has read-only filesystem)
-app = Flask(__name__, instance_relative_config=False)
+# Use /tmp for instance folder (writable in serverless environments)
+app = Flask(__name__, instance_path='/tmp')
 app.config.from_object(Config)
 
 db = SQLAlchemy(app)
