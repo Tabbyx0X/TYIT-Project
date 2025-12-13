@@ -2,159 +2,52 @@ from flask import Flask, render_template, request, redirect, url_for, flash, jso
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
-from datetime import datetime, timedelta
+from datetime import datetime
 from config import Config
-from functools import wraps
 import os
-import re
-import logging
-from logging.handlers import RotatingFileHandler
-import secrets
-from collections import defaultdict
-from threading import Lock
 
 app = Flask(__name__)
 app.config.from_object(Config)
-
-# ==================== Logging Setup ====================
-if not app.debug:
-    if not os.path.exists('logs'):
-        os.mkdir('logs')
-    file_handler = RotatingFileHandler('logs/voting_system.log', maxBytes=10240000, backupCount=10)
-    file_handler.setFormatter(logging.Formatter(
-        '%(asctime)s %(levelname)s: %(message)s [in %(pathname)s:%(lineno)d]'
-    ))
-    file_handler.setLevel(logging.INFO)
-    app.logger.addHandler(file_handler)
-    app.logger.setLevel(logging.INFO)
-    app.logger.info('Voting System startup')
-
-# ==================== Rate Limiting ====================
-login_attempts = defaultdict(list)
-login_lock = Lock()
-
-def check_rate_limit(identifier):
-    """Check if the identifier has exceeded login attempts"""
-    with login_lock:
-        current_time = datetime.utcnow()
-        cutoff_time = current_time - timedelta(seconds=app.config['LOGIN_ATTEMPT_WINDOW'])
-        
-        # Clean old attempts
-        login_attempts[identifier] = [
-            attempt for attempt in login_attempts[identifier] 
-            if attempt > cutoff_time
-        ]
-        
-        # Check if limit exceeded
-        if len(login_attempts[identifier]) >= app.config['LOGIN_ATTEMPT_LIMIT']:
-            return False, "Too many login attempts. Please try again later."
-        
-        return True, None
-
-def record_login_attempt(identifier):
-    """Record a failed login attempt"""
-    with login_lock:
-        login_attempts[identifier].append(datetime.utcnow())
-
-def clear_login_attempts(identifier):
-    """Clear login attempts for successful login"""
-    with login_lock:
-        if identifier in login_attempts:
-            del login_attempts[identifier]
-
-# Enhanced Security Headers
-@app.after_request
-def set_security_headers(response):
-    response.headers['X-Content-Type-Options'] = 'nosniff'
-    response.headers['X-Frame-Options'] = 'SAMEORIGIN'
-    response.headers['X-XSS-Protection'] = '1; mode=block'
-    response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
-    response.headers['Content-Security-Policy'] = "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net;"
-    return response
 
 db = SQLAlchemy(app)
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
-login_manager.login_message = 'Please log in to access this page.'
-login_manager.login_message_category = 'warning'
-
-# ==================== Validation Helpers ====================
-
-def sanitize_input(text):
-    """Sanitize user input to prevent XSS"""
-    if not text:
-        return text
-    # Remove potentially dangerous characters
-    text = text.strip()
-    # Basic HTML escaping is handled by Flask/Jinja2, but we add extra layer
-    return text
-
-def validate_email(email):
-    """Validate email format"""
-    if not email:
-        return False
-    pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
-    return re.match(pattern, email) is not None
-
-def validate_voter_id(voter_id):
-    """Validate voter ID format (alphanumeric, 5-20 characters)"""
-    if not voter_id:
-        return False
-    pattern = r'^[a-zA-Z0-9]{5,20}$'
-    return re.match(pattern, voter_id) is not None
-
-def validate_password(password):
-    """Validate password strength (min 8 characters, must contain letter and number)"""
-    if not password or len(password) < 8:
-        return False, "Password must be at least 8 characters long"
-    
-    if not re.search(r'[A-Za-z]', password):
-        return False, "Password must contain at least one letter"
-    
-    if not re.search(r'\d', password):
-        return False, "Password must contain at least one number"
-    
-    return True, None
-
-def validate_date_range(start_date, end_date):
-    """Validate election date range"""
-    if start_date >= end_date:
-        return False, "End date must be after start date"
-    
-    # Check if start date is not too far in the past
-    if start_date < datetime.utcnow() - timedelta(days=1):
-        return False, "Start date cannot be in the past"
-    
-    return True, None
-
-# ==================== Custom Decorators ====================
-
-def voter_login_required(f):
-    """Decorator to require voter login"""
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        if 'voter_id' not in session:
-            flash('Please login first!', 'warning')
-            return redirect(url_for('voter_login'))
-        return f(*args, **kwargs)
-    return decorated_function
 
 # ==================== Models ====================
+
+class College(db.Model):
+    __tablename__ = 'colleges'
+    id = db.Column(db.Integer, primary_key=True)
+    college_code = db.Column(db.String(20), unique=True, nullable=False)
+    college_name = db.Column(db.String(200), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.now)
+    users = db.relationship('Admin', backref='college', lazy=True)
+    elections = db.relationship('Election', backref='college', lazy=True)
+    voters = db.relationship('Voter', backref='college', lazy=True)
+
 
 class Admin(UserMixin, db.Model):
     __tablename__ = 'admins'
     id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(80), unique=True, nullable=False)
+    username = db.Column(db.String(80), nullable=False)
     password_hash = db.Column(db.String(255), nullable=False)
-    email = db.Column(db.String(120), unique=True, nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    email = db.Column(db.String(120), nullable=False)
+    role = db.Column(db.String(20), default='admin')  # 'admin' or 'teacher'
+    college_code = db.Column(db.String(20), db.ForeignKey('colleges.college_code'), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.now)
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
 
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
+    
+    def is_super_admin(self):
+        return self.role == 'admin' and self.college_code is None
+    
+    def is_teacher(self):
+        return self.role == 'teacher'
 
 
 class Election(db.Model):
@@ -165,12 +58,15 @@ class Election(db.Model):
     start_date = db.Column(db.DateTime, nullable=False)
     end_date = db.Column(db.DateTime, nullable=False)
     status = db.Column(db.String(20), default='upcoming')  # upcoming, active, completed
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    college_code = db.Column(db.String(20), db.ForeignKey('colleges.college_code'), nullable=False)
+    created_by = db.Column(db.Integer, db.ForeignKey('admins.id'), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.now)
     candidates = db.relationship('Candidate', backref='election', lazy=True, cascade='all, delete-orphan')
     votes = db.relationship('Vote', backref='election', lazy=True, cascade='all, delete-orphan')
+    creator = db.relationship('Admin', foreign_keys=[created_by])
 
     def update_status(self):
-        now = datetime.utcnow()
+        now = datetime.now()
         if now < self.start_date:
             self.status = 'upcoming'
         elif now > self.end_date:
@@ -196,11 +92,12 @@ class Candidate(db.Model):
 class Voter(db.Model):
     __tablename__ = 'voters'
     id = db.Column(db.Integer, primary_key=True)
-    voter_id = db.Column(db.String(50), unique=True, nullable=False)
+    voter_id = db.Column(db.String(50), nullable=False)
     name = db.Column(db.String(100), nullable=False)
-    email = db.Column(db.String(120), unique=True, nullable=False)
+    email = db.Column(db.String(120), nullable=False)
     password_hash = db.Column(db.String(255), nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    college_code = db.Column(db.String(20), db.ForeignKey('colleges.college_code'), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.now)
     votes = db.relationship('Vote', backref='voter', lazy=True)
 
     def set_password(self, password):
@@ -219,140 +116,12 @@ class Vote(db.Model):
     voter_id = db.Column(db.Integer, db.ForeignKey('voters.id'), nullable=False)
     election_id = db.Column(db.Integer, db.ForeignKey('elections.id'), nullable=False)
     candidate_id = db.Column(db.Integer, db.ForeignKey('candidates.id'), nullable=False)
-    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+    timestamp = db.Column(db.DateTime, default=datetime.now)
 
 
 @login_manager.user_loader
 def load_user(user_id):
     return Admin.query.get(int(user_id))
-
-
-# ==================== Service Layer Functions ====================
-
-# Authentication Services
-def authenticate_admin(username, password):
-    """Authenticate admin user"""
-    try:
-        admin = Admin.query.filter_by(username=username).first()
-        if admin and admin.check_password(password):
-            app.logger.info(f'Admin login successful: {username}')
-            return admin, None
-        app.logger.warning(f'Failed admin login attempt: {username}')
-        return None, "Invalid username or password"
-    except Exception as e:
-        app.logger.error(f'Error during admin authentication: {str(e)}')
-        return None, "An error occurred during login"
-
-def authenticate_voter(voter_id, password):
-    """Authenticate voter"""
-    try:
-        voter = Voter.query.filter_by(voter_id=voter_id).first()
-        if voter and voter.check_password(password):
-            app.logger.info(f'Voter login successful: {voter_id}')
-            return voter, None
-        app.logger.warning(f'Failed voter login attempt: {voter_id}')
-        return None, "Invalid voter ID or password"
-    except Exception as e:
-        app.logger.error(f'Error during voter authentication: {str(e)}')
-        return None, "An error occurred during login"
-
-# Election Services
-def get_active_elections():
-    """Get all active elections"""
-    try:
-        elections = Election.query.all()
-        for election in elections:
-            election.update_status()
-        db.session.commit()
-        return Election.query.filter_by(status='active').all()
-    except Exception as e:
-        app.logger.error(f'Error fetching active elections: {str(e)}')
-        db.session.rollback()
-        return []
-
-def get_election_statistics():
-    """Get system statistics"""
-    try:
-        return {
-            'total_elections': Election.query.count(),
-            'total_candidates': Candidate.query.count(),
-            'total_voters': Voter.query.count(),
-            'total_votes': Vote.query.count()
-        }
-    except Exception as e:
-        app.logger.error(f'Error fetching statistics: {str(e)}')
-        return {
-            'total_elections': 0,
-            'total_candidates': 0,
-            'total_voters': 0,
-            'total_votes': 0
-        }
-
-# Voting Services
-def can_vote(voter, election):
-    """Check if voter can vote in election"""
-    if election.status != 'active':
-        return False, "This election is not currently active"
-    if voter.has_voted(election.id):
-        return False, "You have already voted in this election"
-    return True, None
-
-def record_vote(voter_id, election_id, candidate_id):
-    """Record a vote with validation"""
-    try:
-        # Validate candidate belongs to election
-        candidate = Candidate.query.get(candidate_id)
-        if not candidate or candidate.election_id != election_id:
-            app.logger.warning(f'Invalid candidate selection: voter_id={voter_id}, candidate_id={candidate_id}')
-            return False, "Invalid candidate selection"
-        
-        # Double-check voter hasn't already voted (race condition prevention)
-        existing_vote = Vote.query.filter_by(
-            voter_id=voter_id, 
-            election_id=election_id
-        ).first()
-        
-        if existing_vote:
-            app.logger.warning(f'Duplicate vote attempt: voter_id={voter_id}, election_id={election_id}')
-            return False, "You have already voted in this election"
-        
-        # Create vote
-        vote = Vote(
-            voter_id=voter_id,
-            election_id=election_id,
-            candidate_id=candidate_id
-        )
-        db.session.add(vote)
-        db.session.commit()
-        
-        app.logger.info(f'Vote recorded: voter_id={voter_id}, election_id={election_id}, candidate_id={candidate_id}')
-        return True, "Vote recorded successfully"
-    except Exception as e:
-        db.session.rollback()
-        app.logger.error(f'Error recording vote: {str(e)}')
-        return False, f"Error recording vote. Please try again."
-
-# Results Services
-def get_election_results(election_id):
-    """Get detailed election results"""
-    election = Election.query.get(election_id)
-    if not election:
-        return None, None, None
-    
-    candidates = Candidate.query.filter_by(election_id=election_id).all()
-    results = []
-    
-    for candidate in candidates:
-        vote_count = candidate.get_vote_count()
-        results.append({
-            'id': candidate.id,
-            'name': candidate.name,
-            'party': candidate.party,
-            'votes': vote_count
-        })
-    
-    total_votes = sum(r['votes'] for r in results)
-    return election, results, total_votes
 
 
 # ==================== Routes ====================
@@ -372,33 +141,23 @@ def login():
         return redirect(url_for('admin_dashboard'))
     
     if request.method == 'POST':
-        username = sanitize_input(request.form.get('username', '').strip())
-        password = request.form.get('password', '')
+        username = request.form.get('username')
+        password = request.form.get('password')
+        college_code = request.form.get('college_code', '').strip()
         
-        # Input validation
-        if not username or not password:
-            flash('Please provide both username and password', 'danger')
-            return render_template('admin/login.html')
-        
-        # Check rate limiting
-        can_attempt, error_msg = check_rate_limit(f'admin_{username}')
-        if not can_attempt:
-            app.logger.warning(f'Rate limit exceeded for admin: {username}')
-            flash(error_msg, 'danger')
-            return render_template('admin/login.html')
-        
-        # Authenticate using service layer
-        admin, error = authenticate_admin(username, password)
-        
-        if admin:
-            login_user(admin)
-            clear_login_attempts(f'admin_{username}')
-            flash('Login successful!', 'success')
-            next_page = request.args.get('next')
-            return redirect(next_page) if next_page else redirect(url_for('admin_dashboard'))
+        # Super admin login (no college code)
+        if not college_code:
+            admin = Admin.query.filter_by(username=username, college_code=None).first()
         else:
-            record_login_attempt(f'admin_{username}')
-            flash(error, 'danger')
+            # Teacher login (with college code)
+            admin = Admin.query.filter_by(username=username, college_code=college_code).first()
+        
+        if admin and admin.check_password(password):
+            login_user(admin)
+            flash('Login successful!', 'success')
+            return redirect(url_for('admin_dashboard'))
+        else:
+            flash('Invalid credentials or college code', 'danger')
     
     return render_template('admin/login.html')
 
@@ -411,134 +170,86 @@ def logout():
     return redirect(url_for('index'))
 
 
-@app.route('/admin/profile', methods=['GET', 'POST'])
-@login_required
-def admin_profile():
-    """Admin profile and password change"""
-    if request.method == 'POST':
-        current_password = request.form.get('current_password', '')
-        new_password = request.form.get('new_password', '')
-        confirm_password = request.form.get('confirm_password', '')
-        
-        # Validation
-        if not all([current_password, new_password, confirm_password]):
-            flash('All fields are required', 'danger')
-            return render_template('admin/profile.html')
-        
-        # Verify current password
-        if not current_user.check_password(current_password):
-            flash('Current password is incorrect', 'danger')
-            return render_template('admin/profile.html')
-        
-        # Check if new passwords match
-        if new_password != confirm_password:
-            flash('New passwords do not match', 'danger')
-            return render_template('admin/profile.html')
-        
-        # Validate password strength
-        is_valid, error_msg = validate_password(new_password)
-        if not is_valid:
-            flash(error_msg, 'danger')
-            return render_template('admin/profile.html')
-        
-        # Update password
-        try:
-            current_user.set_password(new_password)
-            db.session.commit()
-            app.logger.info(f'Password changed for admin: {current_user.username}')
-            flash('Password changed successfully!', 'success')
-            return redirect(url_for('admin_dashboard'))
-        except Exception as e:
-            db.session.rollback()
-            app.logger.error(f'Error changing password: {str(e)}')
-            flash(f'Error changing password. Please try again.', 'danger')
-    
-    return render_template('admin/profile.html')
-
-
 @app.route('/admin/dashboard')
 @login_required
 def admin_dashboard():
-    # Update election statuses
-    elections = Election.query.all()
+    # Super admin sees all elections
+    if current_user.is_super_admin():
+        elections = Election.query.all()
+    else:
+        # Teachers see only their college's elections
+        elections = Election.query.filter_by(college_code=current_user.college_code).all()
+    
     for election in elections:
         election.update_status()
     db.session.commit()
     
-    # Get statistics using service layer
-    stats = get_election_statistics()
+    if current_user.is_super_admin():
+        total_elections = Election.query.count()
+        total_candidates = Candidate.query.count()
+        total_voters = Voter.query.count()
+        total_votes = Vote.query.count()
+    else:
+        total_elections = Election.query.filter_by(college_code=current_user.college_code).count()
+        total_candidates = db.session.query(Candidate).join(Election).filter(
+            Election.college_code == current_user.college_code).count()
+        total_voters = Voter.query.filter_by(college_code=current_user.college_code).count()
+        total_votes = db.session.query(Vote).join(Election).filter(
+            Election.college_code == current_user.college_code).count()
     
     return render_template('admin/dashboard.html', 
                          elections=elections,
-                         total_elections=stats['total_elections'],
-                         total_candidates=stats['total_candidates'],
-                         total_voters=stats['total_voters'],
-                         total_votes=stats['total_votes'])
+                         total_elections=total_elections,
+                         total_candidates=total_candidates,
+                         total_voters=total_voters,
+                         total_votes=total_votes)
 
 
 @app.route('/admin/elections')
 @login_required
 def manage_elections():
-    elections = Election.query.all()
-    return render_template('admin/elections.html', elections=elections)
+    if current_user.is_super_admin():
+        elections = Election.query.all()
+        colleges = College.query.all()
+    else:
+        elections = Election.query.filter_by(college_code=current_user.college_code).all()
+        colleges = []
+    return render_template('admin/elections.html', elections=elections, colleges=colleges)
 
 
 @app.route('/admin/elections/add', methods=['GET', 'POST'])
 @login_required
 def add_election():
     if request.method == 'POST':
-        title = sanitize_input(request.form.get('title', '').strip())
-        description = sanitize_input(request.form.get('description', '').strip())
-        start_date_str = request.form.get('start_date')
-        end_date_str = request.form.get('end_date')
+        title = request.form.get('title')
+        description = request.form.get('description')
+        start_date = datetime.strptime(request.form.get('start_date'), '%Y-%m-%dT%H:%M')
+        end_date = datetime.strptime(request.form.get('end_date'), '%Y-%m-%dT%H:%M')
         
-        # Input validation
-        if not title:
-            flash('Election title is required', 'danger')
-            return render_template('admin/add_election.html')
+        # Super admin can select college, teachers use their own college
+        if current_user.is_super_admin():
+            college_code = request.form.get('college_code')
+        else:
+            college_code = current_user.college_code
         
-        if len(title) > 200:
-            flash('Election title is too long (max 200 characters)', 'danger')
-            return render_template('admin/add_election.html')
-        
-        if not start_date_str or not end_date_str:
-            flash('Start date and end date are required', 'danger')
-            return render_template('admin/add_election.html')
-        
-        try:
-            start_date = datetime.strptime(start_date_str, '%Y-%m-%dT%H:%M')
-            end_date = datetime.strptime(end_date_str, '%Y-%m-%dT%H:%M')
-        except ValueError:
-            flash('Invalid date format', 'danger')
-            return render_template('admin/add_election.html')
-        
-        # Validate date range
-        valid, error_msg = validate_date_range(start_date, end_date)
-        if not valid:
-            flash(error_msg, 'danger')
-            return render_template('admin/add_election.html')
-        
-        # Create election
         election = Election(
             title=title,
             description=description,
             start_date=start_date,
-            end_date=end_date
+            end_date=end_date,
+            college_code=college_code,
+            created_by=current_user.id
         )
         election.update_status()
         
-        try:
-            db.session.add(election)
-            db.session.commit()
-            app.logger.info(f'Election created: {title}')
-            flash('Election created successfully!', 'success')
-            return redirect(url_for('manage_elections'))
-        except Exception as e:
-            db.session.rollback()
-            app.logger.error(f'Error creating election: {str(e)}')
-            flash(f'Error creating election. Please try again.', 'danger')
+        db.session.add(election)
+        db.session.commit()
+        flash('Election created successfully!', 'success')
+        return redirect(url_for('manage_elections'))
     
-    return render_template('admin/add_election.html')
+    # Get colleges for super admin
+    colleges = College.query.all() if current_user.is_super_admin() else []
+    return render_template('admin/add_election.html', colleges=colleges)
 
 
 @app.route('/admin/elections/<int:election_id>/edit', methods=['GET', 'POST'])
@@ -547,43 +258,15 @@ def edit_election(election_id):
     election = Election.query.get_or_404(election_id)
     
     if request.method == 'POST':
-        title = request.form.get('title', '').strip()
-        description = request.form.get('description', '').strip()
-        start_date_str = request.form.get('start_date')
-        end_date_str = request.form.get('end_date')
-        
-        # Input validation
-        if not title:
-            flash('Election title is required', 'danger')
-            return render_template('admin/edit_election.html', election=election)
-        
-        try:
-            start_date = datetime.strptime(start_date_str, '%Y-%m-%dT%H:%M')
-            end_date = datetime.strptime(end_date_str, '%Y-%m-%dT%H:%M')
-        except ValueError:
-            flash('Invalid date format', 'danger')
-            return render_template('admin/edit_election.html', election=election)
-        
-        # Validate date range
-        valid, error_msg = validate_date_range(start_date, end_date)
-        if not valid:
-            flash(error_msg, 'danger')
-            return render_template('admin/edit_election.html', election=election)
-        
-        # Update election
-        election.title = title
-        election.description = description
-        election.start_date = start_date
-        election.end_date = end_date
+        election.title = request.form.get('title')
+        election.description = request.form.get('description')
+        election.start_date = datetime.strptime(request.form.get('start_date'), '%Y-%m-%dT%H:%M')
+        election.end_date = datetime.strptime(request.form.get('end_date'), '%Y-%m-%dT%H:%M')
         election.update_status()
         
-        try:
-            db.session.commit()
-            flash('Election updated successfully!', 'success')
-            return redirect(url_for('manage_elections'))
-        except Exception as e:
-            db.session.rollback()
-            flash(f'Error updating election: {str(e)}', 'danger')
+        db.session.commit()
+        flash('Election updated successfully!', 'success')
+        return redirect(url_for('manage_elections'))
     
     return render_template('admin/edit_election.html', election=election)
 
@@ -611,21 +294,11 @@ def add_candidate(election_id):
     election = Election.query.get_or_404(election_id)
     
     if request.method == 'POST':
-        name = request.form.get('name', '').strip()
-        party = request.form.get('party', '').strip()
-        description = request.form.get('description', '').strip()
-        photo_url = request.form.get('photo_url', '').strip()
+        name = request.form.get('name')
+        party = request.form.get('party')
+        description = request.form.get('description')
+        photo_url = request.form.get('photo_url')
         
-        # Input validation
-        if not name:
-            flash('Candidate name is required', 'danger')
-            return render_template('admin/add_candidate.html', election=election)
-        
-        if not party:
-            flash('Party name is required', 'danger')
-            return render_template('admin/add_candidate.html', election=election)
-        
-        # Create candidate
         candidate = Candidate(
             name=name,
             party=party,
@@ -634,14 +307,10 @@ def add_candidate(election_id):
             election_id=election_id
         )
         
-        try:
-            db.session.add(candidate)
-            db.session.commit()
-            flash('Candidate added successfully!', 'success')
-            return redirect(url_for('manage_candidates', election_id=election_id))
-        except Exception as e:
-            db.session.rollback()
-            flash(f'Error adding candidate: {str(e)}', 'danger')
+        db.session.add(candidate)
+        db.session.commit()
+        flash('Candidate added successfully!', 'success')
+        return redirect(url_for('manage_candidates', election_id=election_id))
     
     return render_template('admin/add_candidate.html', election=election)
 
@@ -652,33 +321,14 @@ def edit_candidate(candidate_id):
     candidate = Candidate.query.get_or_404(candidate_id)
     
     if request.method == 'POST':
-        name = request.form.get('name', '').strip()
-        party = request.form.get('party', '').strip()
-        description = request.form.get('description', '').strip()
-        photo_url = request.form.get('photo_url', '').strip()
+        candidate.name = request.form.get('name')
+        candidate.party = request.form.get('party')
+        candidate.description = request.form.get('description')
+        candidate.photo_url = request.form.get('photo_url')
         
-        # Input validation
-        if not name:
-            flash('Candidate name is required', 'danger')
-            return render_template('admin/edit_candidate.html', candidate=candidate)
-        
-        if not party:
-            flash('Party name is required', 'danger')
-            return render_template('admin/edit_candidate.html', candidate=candidate)
-        
-        # Update candidate
-        candidate.name = name
-        candidate.party = party
-        candidate.description = description
-        candidate.photo_url = photo_url
-        
-        try:
-            db.session.commit()
-            flash('Candidate updated successfully!', 'success')
-            return redirect(url_for('manage_candidates', election_id=candidate.election_id))
-        except Exception as e:
-            db.session.rollback()
-            flash(f'Error updating candidate: {str(e)}', 'danger')
+        db.session.commit()
+        flash('Candidate updated successfully!', 'success')
+        return redirect(url_for('manage_candidates', election_id=candidate.election_id))
     
     return render_template('admin/edit_candidate.html', candidate=candidate)
 
@@ -688,199 +338,126 @@ def edit_candidate(candidate_id):
 def delete_candidate(candidate_id):
     candidate = Candidate.query.get_or_404(candidate_id)
     election_id = candidate.election_id
-    
-    try:
-        db.session.delete(candidate)
-        db.session.commit()
-        flash('Candidate deleted successfully!', 'success')
-    except Exception as e:
-        db.session.rollback()
-        flash(f'Error deleting candidate: {str(e)}', 'danger')
-    
+    db.session.delete(candidate)
+    db.session.commit()
+    flash('Candidate deleted successfully!', 'success')
     return redirect(url_for('manage_candidates', election_id=election_id))
 
 
 @app.route('/admin/elections/<int:election_id>/results')
 @login_required
 def view_results(election_id):
-    # Use service layer
-    election, results, total_votes = get_election_results(election_id)
+    election = Election.query.get_or_404(election_id)
+    candidates = Candidate.query.filter_by(election_id=election_id).all()
     
-    if not election:
-        flash('Election not found', 'danger')
-        return redirect(url_for('admin_dashboard'))
+    results = []
+    for candidate in candidates:
+        results.append({
+            'id': candidate.id,
+            'name': candidate.name,
+            'party': candidate.party,
+            'votes': candidate.get_vote_count()
+        })
+    
+    total_votes = sum(r['votes'] for r in results)
+    
+    # Get detailed vote information (who voted for whom) - for admin and teachers only
+    detailed_votes = []
+    votes = Vote.query.filter_by(election_id=election_id).all()
+    for vote in votes:
+        detailed_votes.append({
+            'voter_name': vote.voter.name,
+            'voter_id': vote.voter.voter_id,
+            'candidate_name': vote.candidate.name,
+            'timestamp': vote.timestamp
+        })
     
     return render_template('admin/results.html', 
                          election=election, 
                          results=results,
-                         total_votes=total_votes)
+                         total_votes=total_votes,
+                         detailed_votes=detailed_votes)
 
 
 @app.route('/api/elections/<int:election_id>/results')
 def api_results(election_id):
-    # Use service layer
-    election, results, total_votes = get_election_results(election_id)
-    
-    if not election:
-        return jsonify({'error': 'Election not found'}), 404
-    
-    return jsonify({
-        'election_id': election_id,
-        'election_title': election.title,
-        'results': results,
-        'total_votes': total_votes
-    })
-
-
-@app.route('/admin/all-votes')
-@login_required
-def view_all_votes():
-    """View all votes with voter and candidate details"""
-    # Get all votes with related data
-    votes = db.session.query(
-        Vote,
-        Voter,
-        Candidate,
-        Election
-    ).join(
-        Voter, Vote.voter_id == Voter.id
-    ).join(
-        Candidate, Vote.candidate_id == Candidate.id
-    ).join(
-        Election, Vote.election_id == Election.id
-    ).order_by(Vote.timestamp.desc()).all()
-    
-    return render_template('admin/all_votes.html', votes=votes)
-
-
-@app.route('/admin/elections/<int:election_id>/votes')
-@login_required
-def view_election_votes(election_id):
-    """View all votes for a specific election"""
     election = Election.query.get_or_404(election_id)
+    candidates = Candidate.query.filter_by(election_id=election_id).all()
     
-    # Get votes for this election
-    votes = db.session.query(
-        Vote,
-        Voter,
-        Candidate
-    ).join(
-        Voter, Vote.voter_id == Voter.id
-    ).join(
-        Candidate, Vote.candidate_id == Candidate.id
-    ).filter(
-        Vote.election_id == election_id
-    ).order_by(Vote.timestamp.desc()).all()
+    results = []
+    for candidate in candidates:
+        results.append({
+            'id': candidate.id,
+            'name': candidate.name,
+            'party': candidate.party,
+            'votes': candidate.get_vote_count()
+        })
     
-    return render_template('admin/election_votes.html', 
-                         election=election, 
-                         votes=votes)
+    return jsonify(results)
 
 
 @app.route('/voter/register', methods=['GET', 'POST'])
 def voter_register():
     if request.method == 'POST':
-        voter_id = sanitize_input(request.form.get('voter_id', '').strip())
-        name = sanitize_input(request.form.get('name', '').strip())
-        email = sanitize_input(request.form.get('email', '').strip().lower())
-        password = request.form.get('password', '')
-        confirm_password = request.form.get('confirm_password', '')
+        voter_id = request.form.get('voter_id')
+        name = request.form.get('name')
+        email = request.form.get('email')
+        password = request.form.get('password')
+        college_code = request.form.get('college_code')
         
-        # Input validation
-        if not all([voter_id, name, email, password]):
-            flash('All fields are required', 'danger')
-            return render_template('voter/register.html')
+        # Check if college exists
+        college = College.query.filter_by(college_code=college_code).first()
+        if not college:
+            flash('Invalid college code!', 'danger')
+            return redirect(url_for('voter_register'))
         
-        if not validate_voter_id(voter_id):
-            flash('Invalid Voter ID format. Use 5-20 alphanumeric characters', 'danger')
-            return render_template('voter/register.html')
+        # Check if voter ID exists for this college
+        if Voter.query.filter_by(voter_id=voter_id, college_code=college_code).first():
+            flash('Voter ID already exists for this college!', 'danger')
+            return redirect(url_for('voter_register'))
         
-        if not validate_email(email):
-            flash('Invalid email format', 'danger')
-            return render_template('voter/register.html')
-        
-        is_valid, error_msg = validate_password(password)
-        if not is_valid:
-            flash(error_msg, 'danger')
-            return render_template('voter/register.html')
-        
-        if password != confirm_password:
-            flash('Passwords do not match', 'danger')
-            return render_template('voter/register.html')
-        
-        # Check for duplicates
-        if Voter.query.filter_by(voter_id=voter_id).first():
-            flash('Voter ID already exists!', 'danger')
-            return render_template('voter/register.html')
-        
-        if Voter.query.filter_by(email=email).first():
-            flash('Email already registered!', 'danger')
-            return render_template('voter/register.html')
-        
-        # Create voter
-        voter = Voter(voter_id=voter_id, name=name, email=email)
+        voter = Voter(voter_id=voter_id, name=name, email=email, college_code=college_code)
         voter.set_password(password)
         
-        try:
-            db.session.add(voter)
-            db.session.commit()
-            app.logger.info(f'New voter registered: {voter_id}')
-            flash('Registration successful! Please login to vote.', 'success')
-            return redirect(url_for('voter_login'))
-        except Exception as e:
-            db.session.rollback()
-            app.logger.error(f'Error during voter registration: {str(e)}')
-            flash(f'Error during registration. Please try again.', 'danger')
+        db.session.add(voter)
+        db.session.commit()
+        flash('Registration successful! Please login to vote.', 'success')
+        return redirect(url_for('voter_login'))
     
     return render_template('voter/register.html')
 
 
 @app.route('/voter/login', methods=['GET', 'POST'])
 def voter_login():
-    # Redirect if already logged in
-    if 'voter_id' in session:
-        return redirect(url_for('voter_dashboard'))
-    
     if request.method == 'POST':
-        voter_id = sanitize_input(request.form.get('voter_id', '').strip())
-        password = request.form.get('password', '')
+        voter_id = request.form.get('voter_id')
+        password = request.form.get('password')
+        college_code = request.form.get('college_code')
         
-        # Input validation
-        if not voter_id or not password:
-            flash('Please provide both Voter ID and password', 'danger')
-            return render_template('voter/login.html')
+        voter = Voter.query.filter_by(voter_id=voter_id, college_code=college_code).first()
         
-        # Check rate limiting
-        can_attempt, error_msg = check_rate_limit(f'voter_{voter_id}')
-        if not can_attempt:
-            app.logger.warning(f'Rate limit exceeded for voter: {voter_id}')
-            flash(error_msg, 'danger')
-            return render_template('voter/login.html')
-        
-        # Authenticate using service layer
-        voter, error = authenticate_voter(voter_id, password)
-        
-        if voter:
+        if voter and voter.check_password(password):
             session['voter_id'] = voter.id
-            session.permanent = True  # Use configured session lifetime
-            clear_login_attempts(f'voter_{voter_id}')
             flash('Login successful!', 'success')
-            next_page = request.args.get('next')
-            return redirect(next_page) if next_page else redirect(url_for('voter_dashboard'))
+            return redirect(url_for('voter_dashboard'))
         else:
-            record_login_attempt(f'voter_{voter_id}')
-            flash(error, 'danger')
+            flash('Invalid voter ID, password, or college code', 'danger')
     
     return render_template('voter/login.html')
 
 
 @app.route('/voter/dashboard')
-@voter_login_required
 def voter_dashboard():
-    voter = Voter.query.get(session['voter_id'])
+    if 'voter_id' not in session:
+        flash('Please login first!', 'warning')
+        return redirect(url_for('voter_login'))
     
-    # Get active elections using service layer
-    elections = get_active_elections()
+    voter = Voter.query.get(session['voter_id'])
+    # Show only active elections from voter's college
+    elections = Election.query.filter_by(
+        status='active', 
+        college_code=voter.college_code
+    ).all()
     
     return render_template('voter/dashboard.html', voter=voter, elections=elections)
 
@@ -893,120 +470,163 @@ def voter_logout():
 
 
 @app.route('/voter/vote/<int:election_id>', methods=['GET', 'POST'])
-@voter_login_required
 def vote(election_id):
+    if 'voter_id' not in session:
+        flash('Please login first!', 'warning')
+        return redirect(url_for('voter_login'))
+    
     voter = Voter.query.get(session['voter_id'])
     election = Election.query.get_or_404(election_id)
     
-    # Check if voter can vote using service layer
-    can_vote_result, error_msg = can_vote(voter, election)
-    if not can_vote_result:
-        flash(error_msg, 'warning')
+    if election.status != 'active':
+        flash('This election is not currently active!', 'warning')
+        return redirect(url_for('voter_dashboard'))
+    
+    if voter.has_voted(election_id):
+        flash('You have already voted in this election!', 'warning')
         return redirect(url_for('voter_dashboard'))
     
     if request.method == 'POST':
         candidate_id = request.form.get('candidate_id')
         
-        # Validate candidate selection
-        if not candidate_id:
-            flash('Please select a candidate', 'warning')
-            candidates = Candidate.query.filter_by(election_id=election_id).all()
-            return render_template('voter/vote.html', election=election, candidates=candidates)
+        vote = Vote(
+            voter_id=voter.id,
+            election_id=election_id,
+            candidate_id=candidate_id
+        )
         
-        try:
-            candidate_id = int(candidate_id)
-        except ValueError:
-            flash('Invalid candidate selection', 'danger')
-            return redirect(url_for('voter_dashboard'))
-        
-        # Record vote using service layer
-        success, message = record_vote(voter.id, election_id, candidate_id)
-        
-        if success:
-            flash(message, 'success')
-        else:
-            flash(message, 'danger')
-        
+        db.session.add(vote)
+        db.session.commit()
+        flash('Your vote has been recorded successfully!', 'success')
         return redirect(url_for('voter_dashboard'))
     
-    # GET request - show candidates
     candidates = Candidate.query.filter_by(election_id=election_id).all()
-    
-    if not candidates:
-        flash('No candidates available for this election', 'warning')
-        return redirect(url_for('voter_dashboard'))
-    
     return render_template('voter/vote.html', election=election, candidates=candidates)
+
+
+# ==================== College & Teacher Management ====================
+
+@app.route('/admin/colleges', methods=['GET'])
+@login_required
+def manage_colleges():
+    if not current_user.is_super_admin():
+        flash('Access denied!', 'danger')
+        return redirect(url_for('admin_dashboard'))
+    
+    colleges = College.query.all()
+    return render_template('admin/colleges.html', colleges=colleges)
+
+
+@app.route('/admin/colleges/add', methods=['POST'])
+@login_required
+def add_college():
+    if not current_user.is_super_admin():
+        flash('Access denied!', 'danger')
+        return redirect(url_for('admin_dashboard'))
+    
+    college_code = request.form.get('college_code').strip().upper()
+    college_name = request.form.get('college_name')
+    
+    if College.query.filter_by(college_code=college_code).first():
+        flash('College code already exists!', 'danger')
+        return redirect(url_for('manage_colleges'))
+    
+    college = College(college_code=college_code, college_name=college_name)
+    db.session.add(college)
+    db.session.commit()
+    flash(f'College {college_name} added successfully!', 'success')
+    return redirect(url_for('manage_colleges'))
+
+
+@app.route('/admin/teachers', methods=['GET'])
+@login_required
+def manage_teachers():
+    if not current_user.is_super_admin():
+        flash('Access denied!', 'danger')
+        return redirect(url_for('admin_dashboard'))
+    
+    teachers = Admin.query.filter_by(role='teacher').all()
+    colleges = College.query.all()
+    return render_template('admin/teachers.html', teachers=teachers, colleges=colleges)
+
+
+@app.route('/admin/teachers/add', methods=['POST'])
+@login_required
+def add_teacher():
+    if not current_user.is_super_admin():
+        flash('Access denied!', 'danger')
+        return redirect(url_for('admin_dashboard'))
+    
+    username = request.form.get('username')
+    email = request.form.get('email')
+    password = request.form.get('password')
+    college_code = request.form.get('college_code')
+    
+    # Check if college exists
+    if not College.query.filter_by(college_code=college_code).first():
+        flash('Invalid college code!', 'danger')
+        return redirect(url_for('manage_teachers'))
+    
+    teacher = Admin(
+        username=username,
+        email=email,
+        role='teacher',
+        college_code=college_code
+    )
+    teacher.set_password(password)
+    
+    db.session.add(teacher)
+    db.session.commit()
+    flash(f'Teacher {username} added successfully!', 'success')
+    return redirect(url_for('manage_teachers'))
+
+
+# ==================== Database Viewer ====================
+
+@app.route('/admin/database')
+@login_required
+def view_database():
+    if not current_user.is_super_admin():
+        flash('Access denied! Super admin only.', 'danger')
+        return redirect(url_for('admin_dashboard'))
+    
+    # Get all data from tables
+    colleges = College.query.all()
+    admins = Admin.query.all()
+    voters = Voter.query.all()
+    elections = Election.query.all()
+    candidates = Candidate.query.all()
+    votes = Vote.query.all()
+    
+    return render_template('admin/database.html',
+                         colleges=colleges,
+                         admins=admins,
+                         voters=voters,
+                         elections=elections,
+                         candidates=candidates,
+                         votes=votes)
 
 
 # ==================== Initialize Database ====================
 
 def init_db():
-    """Initialize database and create default admin"""
     with app.app_context():
-        try:
-            db.create_all()
-            app.logger.info('Database tables created successfully')
-            
-            # Create default admin if not exists
-            if not Admin.query.filter_by(username='admin').first():
-                admin = Admin(username='admin', email='admin@voting.com')
-                admin.set_password('Admin@123')
-                db.session.add(admin)
-                db.session.commit()
-                print("✓ Default admin created")
-                print("  Username: admin")
-                print("  Password: Admin@123")
-                app.logger.info('Default admin account created')
-            
-            # Also create 'root' admin for backward compatibility
-            if not Admin.query.filter_by(username='root').first():
-                root_admin = Admin(username='root', email='root@voting.com')
-                root_admin.set_password('Root@123')
-                db.session.add(root_admin)
-                db.session.commit()
-                print("✓ Root admin created")
-                print("  Username: root")
-                print("  Password: Root@123")
-                app.logger.info('Root admin account created')
-                
-        except Exception as e:
-            app.logger.error(f'Error initializing database: {str(e)}')
-            print(f"✗ Error initializing database: {str(e)}")
-
-
-# ==================== Error Handlers ====================
-
-@app.errorhandler(404)
-def not_found_error(error):
-    """Handle 404 errors"""
-    app.logger.warning(f'404 error: {request.url}')
-    flash('The requested page was not found', 'warning')
-    return redirect(url_for('index'))
-
-@app.errorhandler(500)
-def internal_error(error):
-    """Handle 500 errors"""
-    db.session.rollback()
-    app.logger.error(f'500 error: {str(error)}')
-    flash('An internal error occurred. Please try again later.', 'danger')
-    return redirect(url_for('index'))
-
-@app.errorhandler(403)
-def forbidden_error(error):
-    """Handle 403 errors"""
-    app.logger.warning(f'403 error: {request.url}')
-    flash('You do not have permission to access this resource', 'danger')
-    return redirect(url_for('index'))
-
-@app.errorhandler(413)
-def request_entity_too_large(error):
-    """Handle file too large errors"""
-    app.logger.warning(f'413 error: Request entity too large')
-    flash('File size exceeds maximum limit', 'danger')
-    return redirect(request.referrer or url_for('index'))
+        db.create_all()
+        
+        # Create default super admin if not exists (no college code)
+        if not Admin.query.filter_by(username='admin', college_code=None).first():
+            admin = Admin(
+                username='admin', 
+                email='admin@voting.com',
+                role='admin',
+                college_code=None
+            )
+            admin.set_password('admin123')
+            db.session.add(admin)
+            db.session.commit()
+            # print("Default super admin created: username='admin', password='admin123' (no college code needed)")
 
 
 if __name__ == '__main__':
     init_db()
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    app.run(debug=True, port=5000)

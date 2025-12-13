@@ -1,0 +1,70 @@
+{% extends 'base.html' %}
+
+{% block title %}Manage Colleges{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="fas fa-university"></i> Manage Colleges</h2>
+        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addCollegeModal">
+            <i class="fas fa-plus"></i> Add College
+        </button>
+    </div>
+
+    <div class="card">
+        <div class="card-body">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>College Code</th>
+                        <th>College Name</th>
+                        <th>Created At</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for college in colleges %}
+                    <tr>
+                        <td><span class="badge bg-primary">{{ college.college_code }}</span></td>
+                        <td>{{ college.college_name }}</td>
+                        <td>{{ college.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="3" class="text-center">No colleges found. Add your first college!</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Add College Modal -->
+<div class="modal fade" id="addCollegeModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Add New College</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="{{ url_for('add_college') }}">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="college_code" class="form-label">College Code *</label>
+                        <input type="text" class="form-control" id="college_code" name="college_code" required>
+                        <small class="text-muted">Unique code (e.g., MIT, SPIT, KJSCE)</small>
+                    </div>
+                    <div class="mb-3">
+                        <label for="college_name" class="form-label">College Name *</label>
+                        <input type="text" class="form-control" id="college_name" name="college_name" required>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="submit" class="btn btn-primary">Add College</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

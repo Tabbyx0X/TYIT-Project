@@ -24,12 +24,16 @@
         <div class="col-md-6 col-lg-4 mb-4">
             <div class="card h-100">
                 <div class="card-body">
+                    {% if candidate.photo_url %}
                     <div class="text-center mb-3">
-                        <img src="{{ candidate.photo_url or url_for('static', filename='images/default-avatar.svg') }}" 
-                             alt="{{ candidate.name }}" 
-                             class="rounded-circle" 
-                             style="width: 100px; height: 100px; object-fit: cover; border: 2px solid #dee2e6;">
+                        <img src="{{ candidate.photo_url }}" alt="{{ candidate.name }}" 
+                             class="rounded-circle" style="width: 100px; height: 100px; object-fit: cover;">
                     </div>
+                    {% else %}
+                    <div class="text-center mb-3">
+                        <i class="fas fa-user-circle fa-5x text-secondary"></i>
+                    </div>
+                    {% endif %}
                     
                     <h5 class="card-title text-center">{{ candidate.name }}</h5>
                     

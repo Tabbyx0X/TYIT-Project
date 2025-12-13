@@ -6,9 +6,17 @@
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h2><i class="fas fa-tachometer-alt"></i> Admin Dashboard</h2>
     <div>
-        <a href="{{ url_for('admin_profile') }}" class="btn btn-outline-primary me-2">
-            <i class="fas fa-user-circle"></i> Profile
+        {% if current_user.is_super_admin() %}
+        <a href="{{ url_for('view_database') }}" class="btn btn-dark me-2">
+            <i class="fas fa-database"></i> Database
         </a>
+        <a href="{{ url_for('manage_colleges') }}" class="btn btn-info me-2">
+            <i class="fas fa-university"></i> Colleges
+        </a>
+        <a href="{{ url_for('manage_teachers') }}" class="btn btn-secondary me-2">
+            <i class="fas fa-chalkboard-teacher"></i> Teachers
+        </a>
+        {% endif %}
         <a href="{{ url_for('logout') }}" class="btn btn-outline-danger">
             <i class="fas fa-sign-out-alt"></i> Logout
         </a>
@@ -69,11 +77,6 @@
                     <i class="fas fa-vote-yea fa-3x opacity-50"></i>
                 </div>
             </div>
-            <div class="card-footer bg-transparent border-top border-white">
-                <a href="{{ url_for('view_all_votes') }}" class="text-white text-decoration-none">
-                    <small><i class="fas fa-list"></i> View All Votes</small>
-                </a>
-            </div>
         </div>
     </div>
 </div>
@@ -117,9 +120,6 @@
                                 </a>
                                 <a href="{{ url_for('view_results', election_id=election.id) }}" class="btn btn-sm btn-success" title="View Results">
                                     <i class="fas fa-chart-bar"></i>
-                                </a>
-                                <a href="{{ url_for('view_election_votes', election_id=election.id) }}" class="btn btn-sm btn-primary" title="View Votes">
-                                    <i class="fas fa-list-ul"></i>
                                 </a>
                                 <a href="{{ url_for('edit_election', election_id=election.id) }}" class="btn btn-sm btn-warning" title="Edit">
                                     <i class="fas fa-edit"></i>

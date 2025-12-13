@@ -1,102 +1,100 @@
-{% extends "base.html" %}
+{% extends 'base.html' %}
 
 {% block title %}Home - Online Voting System{% endblock %}
 
 {% block content %}
-<!-- Hero Banner -->
-<div class="row mb-5">
-    <div class="col-12">
-        <div class="card border-0 hero-image">
-            <img src="{{ url_for('static', filename='images/hero-banner.svg') }}" 
-                 class="card-img-top rounded" 
-                 alt="Online Voting System Hero Banner"
-                 style="max-height: 400px; object-fit: cover;">
+<div class="jumbotron bg-white p-5 rounded-3 mb-4">
+    <div class="text-center">
+        <h1 class="display-4 fw-bold text-primary">
+            <i class="fas fa-vote-yea"></i> Welcome to Online Voting System
+        </h1>
+        <p class="lead mt-3">Secure, Transparent, and Democratic Voting Platform</p>
+        <hr class="my-4">
+        <p>Cast your vote from anywhere, anytime. Make your voice heard in upcoming elections.</p>
+        <div class="mt-4">
+            <a class="btn btn-primary btn-lg me-2" href="{{ url_for('voter_register') }}">
+                <i class="fas fa-user-plus"></i> Register to Vote
+            </a>
+            <a class="btn btn-outline-primary btn-lg" href="{{ url_for('voter_login') }}">
+                <i class="fas fa-sign-in-alt"></i> Login to Vote
+            </a>
         </div>
     </div>
 </div>
 
-<div class="row">
-    <div class="col-md-12 text-center mb-5">
-        <h1 class="display-4">Welcome to Online Voting System</h1>
-        <p class="lead">Secure, Transparent, and Easy to Use</p>
-    </div>
-</div>
-
-<div class="row mb-5">
-    <div class="col-md-4">
-        <div class="card text-center h-100 border-0 shadow-sm">
-            <div class="card-body">
-                <img src="{{ url_for('static', filename='images/secure-icon.svg') }}" 
-                     alt="Secure" class="mb-3" style="width: 100px; height: 100px;">
-                <h5 class="card-title mt-3">Secure</h5>
-                <p class="card-text">Your vote is encrypted and protected with state-of-the-art security.</p>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-4">
-        <div class="card text-center h-100 border-0 shadow-sm">
-            <div class="card-body">
-                <img src="{{ url_for('static', filename='images/transparent-icon.svg') }}" 
-                     alt="Transparent" class="mb-3" style="width: 100px; height: 100px;">
-                <h5 class="card-title mt-3">Transparent</h5>
-                <p class="card-text">Real-time results and complete transparency in the voting process.</p>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-4">
-        <div class="card text-center h-100 border-0 shadow-sm">
-            <div class="card-body">
-                <img src="{{ url_for('static', filename='images/vote-icon.svg') }}" 
-                     alt="Easy to Use" class="mb-3" style="width: 100px; height: 100px;">
-                <h5 class="card-title mt-3">Easy</h5>
-                <p class="card-text">Simple and intuitive interface for all users.</p>
-            </div>
-        </div>
-    </div>
-</div>
-
-<div class="row">
+<div class="row mb-4">
     <div class="col-md-12">
-        <h2 class="mb-4">Active Elections</h2>
-        {% if elections %}
-            <div class="row">
-                {% for election in elections %}
-                    <div class="col-md-6 mb-4">
-                        <div class="card">
-                            <div class="card-body">
-                                <h5 class="card-title">{{ election.title }}</h5>
-                                <p class="card-text">{{ election.description or 'No description available' }}</p>
-                                <p class="text-muted">
-                                    <small>
-                                        <i class="bi bi-calendar"></i> 
-                                        {{ election.start_date.strftime('%Y-%m-%d %H:%M') }} to 
-                                        {{ election.end_date.strftime('%Y-%m-%d %H:%M') }}
-                                    </small>
-                                </p>
-                                <span class="badge bg-{{ 'success' if election.status == 'active' else 'secondary' if election.status == 'upcoming' else 'danger' }}">
-                                    {{ election.status.upper() }}
-                                </span>
-                            </div>
-                        </div>
-                    </div>
-                {% endfor %}
-            </div>
-        {% else %}
-            <div class="alert alert-info">
-                <i class="bi bi-info-circle"></i> No elections available at the moment.
-            </div>
-        {% endif %}
+        <h2 class="mb-4"><i class="fas fa-calendar-alt"></i> Elections</h2>
     </div>
 </div>
+
+{% if elections %}
+    <div class="row">
+        {% for election in elections %}
+        <div class="col-md-6 col-lg-4 mb-4">
+            <div class="card h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start mb-3">
+                        <h5 class="card-title">{{ election.title }}</h5>
+                        <span class="status-badge status-{{ election.status }}">
+                            {% if election.status == 'active' %}
+                                <i class="fas fa-circle-dot"></i> Active
+                            {% elif election.status == 'upcoming' %}
+                                <i class="fas fa-clock"></i> Upcoming
+                            {% else %}
+                                <i class="fas fa-check-circle"></i> Completed
+                            {% endif %}
+                        </span>
+                    </div>
+                    <p class="card-text text-muted">{{ election.description }}</p>
+                    <div class="mt-3">
+                        <p class="mb-1"><i class="fas fa-calendar-day"></i> <strong>Start:</strong> {{ election.start_date.strftime('%Y-%m-%d %H:%M') }}</p>
+                        <p class="mb-1"><i class="fas fa-calendar-check"></i> <strong>End:</strong> {{ election.end_date.strftime('%Y-%m-%d %H:%M') }}</p>
+                        <p class="mb-0"><i class="fas fa-users"></i> <strong>Candidates:</strong> {{ election.candidates|length }}</p>
+                    </div>
+                    {% if election.status == 'active' %}
+                    <div class="mt-3">
+                        <a href="{{ url_for('vote', election_id=election.id) }}" class="btn btn-primary w-100">
+                            <i class="fas fa-vote-yea"></i> Vote Now
+                        </a>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+{% else %}
+    <div class="alert alert-info text-center">
+        <i class="fas fa-info-circle"></i> No elections available at the moment.
+    </div>
+{% endif %}
 
 <div class="row mt-5">
-    <div class="col-md-6 offset-md-3 text-center">
-        <div class="card bg-light">
+    <div class="col-md-4 mb-4">
+        <div class="card text-center">
             <div class="card-body">
-                <h4>Ready to Vote?</h4>
-                <p>Register now or login to cast your vote!</p>
-                <a href="{{ url_for('voter_register') }}" class="btn btn-primary me-2">Register</a>
-                <a href="{{ url_for('voter_login') }}" class="btn btn-outline-primary">Login</a>
+                <i class="fas fa-shield-alt fa-3x text-primary mb-3"></i>
+                <h5 class="card-title">Secure</h5>
+                <p class="card-text">Your vote is encrypted and securely stored in our database.</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4 mb-4">
+        <div class="card text-center">
+            <div class="card-body">
+                <i class="fas fa-eye fa-3x text-success mb-3"></i>
+                <h5 class="card-title">Transparent</h5>
+                <p class="card-text">Real-time results and vote counting you can trust.</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4 mb-4">
+        <div class="card text-center">
+            <div class="card-body">
+                <i class="fas fa-mobile-alt fa-3x text-info mb-3"></i>
+                <h5 class="card-title">Accessible</h5>
+                <p class="card-text">Vote from anywhere using your computer or mobile device.</p>
             </div>
         </div>
     </div>

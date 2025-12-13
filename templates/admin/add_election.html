@@ -21,6 +21,18 @@
                         <textarea class="form-control" id="description" name="description" rows="3"></textarea>
                     </div>
                     
+                    {% if colleges %}
+                    <div class="mb-3">
+                        <label for="college_code" class="form-label">College *</label>
+                        <select class="form-select" id="college_code" name="college_code" required>
+                            <option value="">Select College</option>
+                            {% for college in colleges %}
+                            <option value="{{ college.college_code }}">{{ college.college_name }} ({{ college.college_code }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    {% endif %}
+                    
                     <div class="row">
                         <div class="col-md-6 mb-3">
                             <label for="start_date" class="form-label">Start Date & Time *</label>
