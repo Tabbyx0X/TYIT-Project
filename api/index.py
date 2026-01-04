@@ -10,38 +10,36 @@ from app import app, db, Admin
 with app.app_context():
     db.create_all()
     
-    # Create default admin if not exists
-    if not Admin.query.filter_by(username='ppatki').first():
-        admin = Admin(
-            username='ppatki',
-            email='prasadpatki4@gmail.com',
-            role='admin'
-        )
-        admin.set_password('ppatki16')
-        db.session.add(admin)
-        db.session.commit()
+    # Admin credentials from environment variables (secure)
+    admin_configs = [
+        {
+            'username': os.environ.get('ADMIN1_USER'),
+            'email': os.environ.get('ADMIN1_EMAIL'),
+            'password': os.environ.get('ADMIN1_PASS')
+        },
+        {
+            'username': os.environ.get('ADMIN2_USER'),
+            'email': os.environ.get('ADMIN2_EMAIL'),
+            'password': os.environ.get('ADMIN2_PASS')
+        },
+        {
+            'username': os.environ.get('ADMIN3_USER'),
+            'email': os.environ.get('ADMIN3_EMAIL'),
+            'password': os.environ.get('ADMIN3_PASS')
+        }
+    ]
     
-    # Create second admin if not exists
-    if not Admin.query.filter_by(username='ppatki2').first():
-        admin2 = Admin(
-            username='ppatki2',
-            email='prasadpatki84@gmail.com',
-            role='admin'
-        )
-        admin2.set_password('ppatki16')
-        db.session.add(admin2)
-        db.session.commit()
-    
-    # Create third admin if not exists
-    if not Admin.query.filter_by(username='sashii').first():
-        admin3 = Admin(
-            username='sashii',
-            email='dhanvesakshi16@gmail.com',
-            role='admin'
-        )
-        admin3.set_password('Sashiii29')
-        db.session.add(admin3)
-        db.session.commit()
+    for config in admin_configs:
+        if config['username'] and config['email'] and config['password']:
+            if not Admin.query.filter_by(username=config['username']).first():
+                admin = Admin(
+                    username=config['username'],
+                    email=config['email'],
+                    role='admin'
+                )
+                admin.set_password(config['password'])
+                db.session.add(admin)
+                db.session.commit()
 
 # Export the Flask app directly for Vercel
 # Vercel expects the WSGI application to be named 'app'
