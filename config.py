@@ -28,14 +28,13 @@ class Config:
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     SQLALCHEMY_ECHO = False
     
-    # Optimized for Supabase Pooler + Serverless
+    # Optimized for Neon Pooler + Serverless
     SQLALCHEMY_ENGINE_OPTIONS = {
         'pool_pre_ping': True,
         'pool_size': 1,
         'max_overflow': 0,
         'pool_recycle': 60,
         'connect_args': {
-            'connect_timeout': 10,
-            'options': '-c statement_timeout=30000'
+            'connect_timeout': 10
         }
     }
