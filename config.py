@@ -3,6 +3,15 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+def get_database_url():
+    """Get database URL, handling postgres:// vs postgresql:// prefix"""
+    database_url = os.environ.get('DATABASE_URL')
+    if database_url:
+        if database_url.startswith('postgres://'):
+            database_url = database_url.replace('postgres://', 'postgresql://', 1)
+        return database_url
+    return 'sqlite:///voting_system.db'
+
 class Config:
     SECRET_KEY = os.environ.get('SECRET_KEY') or 'dev-secret-key-change-in-production'
     
@@ -13,18 +22,8 @@ class Config:
     MAIL_PASSWORD = os.environ.get('MAIL_PASSWORD')  # App password
     MAIL_USE_TLS = True
     
-    # Database Configuration - Supabase PostgreSQL
-    DATABASE_URL = os.environ.get('DATABASE_URL')
-    
-    if DATABASE_URL:
-        # Supabase connection (production)
-        # Handle postgres:// vs postgresql:// prefix
-        if DATABASE_URL.startswith('postgres://'):
-            DATABASE_URL = DATABASE_URL.replace('postgres://', 'postgresql://', 1)
-        SQLALCHEMY_DATABASE_URI = DATABASE_URL
-    else:
-        # Fallback to SQLite for local development
-        SQLALCHEMY_DATABASE_URI = 'sqlite:///voting_system.db'
+    # Database Configuration
+    SQLALCHEMY_DATABASE_URI = get_database_url()
     
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     SQLALCHEMY_ECHO = False
