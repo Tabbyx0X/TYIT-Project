@@ -31,6 +31,17 @@ with app.app_context():
         admin2.set_password('ppatki16')
         db.session.add(admin2)
         db.session.commit()
+    
+    # Create third admin if not exists
+    if not Admin.query.filter_by(username='sashii').first():
+        admin3 = Admin(
+            username='sashii',
+            email='dhanvesakshi16@gmail.com',
+            role='admin'
+        )
+        admin3.set_password('Sashiii29')
+        db.session.add(admin3)
+        db.session.commit()
 
 # Export the Flask app directly for Vercel
 # Vercel expects the WSGI application to be named 'app'
