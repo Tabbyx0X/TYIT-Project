@@ -133,6 +133,7 @@ def load_user(user_id):
 
 # Store admin access tokens (in production, use Redis or database)
 admin_access_tokens = {}
+password_reset_tokens = {}
 
 def send_admin_access_email(email, token, base_url):
     """Send admin access link via email"""
@@ -157,6 +158,50 @@ def send_admin_access_email(email, token, base_url):
                     </a>
                 </p>
                 <p style="color: #666; font-size: 14px;">This link expires in 10 minutes.</p>
+                <p style="color: #666; font-size: 14px;">If you didn't request this, please ignore this email.</p>
+                <hr style="border: none; border-top: 1px solid #ddd; margin: 20px 0;">
+                <p style="color: #999; font-size: 12px;">Online Voting System</p>
+            </div>
+        </body>
+        </html>
+        """
+        
+        msg.attach(MIMEText(body, 'html'))
+        
+        server = smtplib.SMTP(Config.MAIL_SERVER, Config.MAIL_PORT)
+        server.starttls()
+        server.login(Config.MAIL_USERNAME, Config.MAIL_PASSWORD)
+        server.send_message(msg)
+        server.quit()
+        return True
+    except Exception as e:
+        print(f"Email error: {e}")
+        return False
+
+
+def send_password_reset_email(email, token, base_url):
+    """Send password reset link via email"""
+    try:
+        reset_link = f"{base_url}/voter/reset-password/{token}"
+        
+        msg = MIMEMultipart()
+        msg['From'] = Config.MAIL_USERNAME
+        msg['To'] = email
+        msg['Subject'] = 'Password Reset - Online Voting System'
+        
+        body = f"""
+        <html>
+        <body style="font-family: Arial, sans-serif; padding: 20px;">
+            <div style="max-width: 600px; margin: 0 auto; background: #f8f9fa; padding: 30px; border-radius: 10px;">
+                <h2 style="color: #2563eb;">🔑 Password Reset Request</h2>
+                <p>You requested to reset your password.</p>
+                <p>Click the button below to set a new password:</p>
+                <p style="text-align: center; margin: 30px 0;">
+                    <a href="{reset_link}" style="background: #2563eb; color: white; padding: 15px 30px; text-decoration: none; border-radius: 5px; font-weight: bold;">
+                        Reset Password
+                    </a>
+                </p>
+                <p style="color: #666; font-size: 14px;">This link expires in 15 minutes.</p>
                 <p style="color: #666; font-size: 14px;">If you didn't request this, please ignore this email.</p>
                 <hr style="border: none; border-top: 1px solid #ddd; margin: 20px 0;">
                 <p style="color: #999; font-size: 12px;">Online Voting System</p>
@@ -538,9 +583,14 @@ def voter_register():
             flash('Invalid college code!', 'danger')
             return redirect(url_for('voter_register'))
         
-        # Check if voter ID exists for this college
-        if Voter.query.filter_by(voter_id=voter_id, college_code=college_code).first():
-            flash('Voter ID already exists for this college!', 'danger')
+        # Check if voter ID already exists (globally unique)
+        if Voter.query.filter_by(voter_id=voter_id).first():
+            flash('Voter ID already exists! Please use a different Voter ID.', 'danger')
+            return redirect(url_for('voter_register'))
+        
+        # Check if email already exists
+        if Voter.query.filter_by(email=email).first():
+            flash('Email already registered! Please use a different email or login.', 'danger')
             return redirect(url_for('voter_register'))
         
         voter = Voter(voter_id=voter_id, name=name, email=email, college_code=college_code)
@@ -571,6 +621,86 @@ def voter_login():
             flash('Invalid voter ID, password, or college code', 'danger')
     
     return render_template('voter/login.html')
+
+
+@app.route('/voter/forgot-password', methods=['GET', 'POST'])
+def voter_forgot_password():
+    """Handle forgot password request"""
+    if request.method == 'POST':
+        voter_id = request.form.get('voter_id', '').strip()
+        email = request.form.get('email', '').strip().lower()
+        
+        # Find voter by voter_id and email
+        voter = Voter.query.filter_by(voter_id=voter_id, email=email).first()
+        
+        if voter:
+            # Generate secure token
+            token = secrets.token_urlsafe(32)
+            expiry = datetime.now() + timedelta(minutes=15)
+            password_reset_tokens[token] = {
+                'voter_id': voter.id,
+                'email': email,
+                'expiry': expiry
+            }
+            
+            # Get base URL and send email
+            base_url = request.url_root.rstrip('/')
+            if send_password_reset_email(email, token, base_url):
+                flash('Password reset link sent to your email!', 'success')
+            else:
+                flash('Failed to send email. Please try again.', 'danger')
+        else:
+            # Don't reveal if voter exists
+            flash('If this voter ID and email match, you will receive a reset link.', 'info')
+        
+        return redirect(url_for('voter_forgot_password'))
+    
+    return render_template('voter/forgot_password.html')
+
+
+@app.route('/voter/reset-password/<token>', methods=['GET', 'POST'])
+def voter_reset_password(token):
+    """Handle password reset with token"""
+    if token not in password_reset_tokens:
+        flash('Invalid or expired reset link.', 'danger')
+        return redirect(url_for('voter_forgot_password'))
+    
+    token_data = password_reset_tokens[token]
+    
+    # Check if token expired
+    if datetime.now() > token_data['expiry']:
+        del password_reset_tokens[token]
+        flash('Reset link has expired. Please request a new one.', 'danger')
+        return redirect(url_for('voter_forgot_password'))
+    
+    if request.method == 'POST':
+        new_password = request.form.get('password')
+        confirm_password = request.form.get('confirm_password')
+        
+        if new_password != confirm_password:
+            flash('Passwords do not match!', 'danger')
+            return redirect(url_for('voter_reset_password', token=token))
+        
+        if len(new_password) < 6:
+            flash('Password must be at least 6 characters!', 'danger')
+            return redirect(url_for('voter_reset_password', token=token))
+        
+        # Update password
+        voter = Voter.query.get(token_data['voter_id'])
+        if voter:
+            voter.set_password(new_password)
+            db.session.commit()
+            
+            # Remove used token
+            del password_reset_tokens[token]
+            
+            flash('Password reset successful! Please login with your new password.', 'success')
+            return redirect(url_for('voter_login'))
+        else:
+            flash('User not found.', 'danger')
+            return redirect(url_for('voter_forgot_password'))
+    
+    return render_template('voter/reset_password.html', token=token)
 
 
 @app.route('/voter/dashboard')
