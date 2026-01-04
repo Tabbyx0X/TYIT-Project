@@ -74,12 +74,8 @@ If you've forgotten your password or can't login:
 ## Quick Reference
 
 ### Default Admin Credentials
-- **Username:** `admin`
-- **Password:** `admin123`
-
-### Other Admin Accounts
-- **Username:** `root`
-- **Password:** `root`
+- **Username:** `ppatki`
+- **Password:** `ppatki16`
 
 ### Password Requirements
 - ✅ Minimum 6 characters

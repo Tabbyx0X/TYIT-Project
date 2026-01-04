@@ -2,9 +2,13 @@ from flask import Flask, render_template, request, redirect, url_for, flash, jso
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
-from datetime import datetime
+from datetime import datetime, timedelta
 from config import Config
 import os
+import secrets
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 
 # Use /tmp for instance folder (writable in serverless environments)
 app = Flask(__name__, instance_path='/tmp')
@@ -127,6 +131,114 @@ def load_user(user_id):
 
 # ==================== Routes ====================
 
+# Store admin access tokens (in production, use Redis or database)
+admin_access_tokens = {}
+
+def send_admin_access_email(email, token, base_url):
+    """Send admin access link via email"""
+    try:
+        access_link = f"{base_url}/admin/verify/{token}"
+        
+        msg = MIMEMultipart()
+        msg['From'] = Config.MAIL_USERNAME
+        msg['To'] = email
+        msg['Subject'] = 'Admin Access Link - Online Voting System'
+        
+        body = f"""
+        <html>
+        <body style="font-family: Arial, sans-serif; padding: 20px;">
+            <div style="max-width: 600px; margin: 0 auto; background: #f8f9fa; padding: 30px; border-radius: 10px;">
+                <h2 style="color: #2563eb;">🔐 Admin Access Request</h2>
+                <p>You requested access to the Admin Login page.</p>
+                <p>Click the button below to access the admin login:</p>
+                <p style="text-align: center; margin: 30px 0;">
+                    <a href="{access_link}" style="background: #2563eb; color: white; padding: 15px 30px; text-decoration: none; border-radius: 5px; font-weight: bold;">
+                        Access Admin Login
+                    </a>
+                </p>
+                <p style="color: #666; font-size: 14px;">This link expires in 10 minutes.</p>
+                <p style="color: #666; font-size: 14px;">If you didn't request this, please ignore this email.</p>
+                <hr style="border: none; border-top: 1px solid #ddd; margin: 20px 0;">
+                <p style="color: #999; font-size: 12px;">Online Voting System</p>
+            </div>
+        </body>
+        </html>
+        """
+        
+        msg.attach(MIMEText(body, 'html'))
+        
+        server = smtplib.SMTP(Config.MAIL_SERVER, Config.MAIL_PORT)
+        server.starttls()
+        server.login(Config.MAIL_USERNAME, Config.MAIL_PASSWORD)
+        server.send_message(msg)
+        server.quit()
+        return True
+    except Exception as e:
+        print(f"Email error: {e}")
+        return False
+
+
+@app.route('/admin', methods=['GET', 'POST'])
+def admin_email_verify():
+    """Admin access - require email verification first"""
+    if current_user.is_authenticated:
+        return redirect(url_for('admin_dashboard'))
+    
+    if request.method == 'POST':
+        email = request.form.get('email', '').strip().lower()
+        
+        # Check if email belongs to an admin
+        admin = Admin.query.filter_by(email=email).first()
+        if admin:
+            # Generate secure token
+            token = secrets.token_urlsafe(32)
+            expiry = datetime.now() + timedelta(minutes=10)
+            admin_access_tokens[token] = {'email': email, 'expiry': expiry}
+            
+            # Get base URL
+            base_url = request.url_root.rstrip('/')
+            
+            # Send email
+            if send_admin_access_email(email, token, base_url):
+                flash('Access link sent to your email! Check your inbox.', 'success')
+            else:
+                flash('Failed to send email. Please try again or contact support.', 'danger')
+        else:
+            # Don't reveal if email exists or not
+            flash('If this email is registered as admin, you will receive an access link.', 'info')
+        
+        return redirect(url_for('admin_email_verify'))
+    
+    return render_template('admin/email_verify.html')
+
+
+@app.route('/admin/verify/<token>')
+def admin_verify_token(token):
+    """Verify the token and redirect to login"""
+    if token in admin_access_tokens:
+        token_data = admin_access_tokens[token]
+        
+        if datetime.now() < token_data['expiry']:
+            # Token is valid - store in session and redirect to login
+            session['admin_access_verified'] = True
+            session['admin_access_email'] = token_data['email']
+            session['admin_access_expiry'] = (datetime.now() + timedelta(minutes=15)).isoformat()
+            
+            # Remove used token
+            del admin_access_tokens[token]
+            
+            flash('Email verified! Please login with your credentials.', 'success')
+            return redirect(url_for('login'))
+        else:
+            # Token expired
+            del admin_access_tokens[token]
+            flash('Access link has expired. Please request a new one.', 'danger')
+    else:
+        flash('Invalid or expired access link.', 'danger')
+    
+    return redirect(url_for('admin_email_verify'))
+
+
 @app.route('/')
 def index():
     elections = Election.query.all()
@@ -138,6 +250,20 @@ def index():
 
 @app.route('/admin/login', methods=['GET', 'POST'])
 def login():
+    # Check if admin access is verified
+    if not session.get('admin_access_verified'):
+        flash('Please verify your email first to access admin login.', 'warning')
+        return redirect(url_for('admin_email_verify'))
+    
+    # Check if session expired
+    expiry = session.get('admin_access_expiry')
+    if expiry and datetime.fromisoformat(expiry) < datetime.now():
+        session.pop('admin_access_verified', None)
+        session.pop('admin_access_email', None)
+        session.pop('admin_access_expiry', None)
+        flash('Session expired. Please verify your email again.', 'warning')
+        return redirect(url_for('admin_email_verify'))
+    
     if current_user.is_authenticated:
         return redirect(url_for('admin_dashboard'))
     
