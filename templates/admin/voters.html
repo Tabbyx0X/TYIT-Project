@@ -44,14 +44,7 @@
                             <td><code>{{ voter.voter_id }}</code></td>
                             <td><strong>{{ voter.name }}</strong></td>
                             <td>
-                                <span class="{% if '@' not in voter.email or '.' not in voter.email.split('@')[1] if '@' in voter.email else true %}text-danger{% endif %}">
-                                    {{ voter.email }}
-                                </span>
-                                {% if '@' not in voter.email or ('.' not in voter.email.split('@')[1] if '@' in voter.email else true) %}
-                                    <span class="badge bg-warning text-dark ms-1" title="Possibly invalid email">
-                                        <i class="fas fa-exclamation-triangle"></i>
-                                    </span>
-                                {% endif %}
+                                {{ voter.email }}
                             </td>
                             <td>
                                 <span class="badge bg-info">{{ voter.college_code }}</span>

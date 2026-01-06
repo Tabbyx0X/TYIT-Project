@@ -10,6 +10,55 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
+import re
+
+# List of known disposable/temporary email domains to block
+BLOCKED_EMAIL_DOMAINS = [
+    'tempmail.com', 'temp-mail.org', 'guerrillamail.com', 'guerrillamail.org',
+    'mailinator.com', 'throwaway.email', 'fakeinbox.com', 'trashmail.com',
+    'yopmail.com', 'sharklasers.com', 'guerrillamail.info', 'grr.la',
+    'mailnesia.com', 'mytemp.email', 'tempmailaddress.com', 'throwawaymail.com',
+    'getnada.com', 'tempail.com', 'emailondeck.com', 'mohmal.com',
+    '10minutemail.com', '10minutemail.net', 'minutemail.com', 'tempinbox.com',
+    'discard.email', 'mailcatch.com', 'mailsac.com', 'spamgourmet.com',
+    'maildrop.cc', 'getairmail.com', 'fakemailgenerator.com', 'emailfake.com',
+    'crazymailing.com', 'tempmailo.com', 'tempr.email', 'dispostable.com',
+    'mailnull.com', 'spamfree24.org', 'binkmail.com', 'safetymail.info'
+]
+
+def is_valid_email(email):
+    """Validate email format and check against blocked domains"""
+    if not email:
+        return False, "Email is required"
+    
+    email = email.strip().lower()
+    
+    # Basic email format validation using regex
+    email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    if not re.match(email_pattern, email):
+        return False, "Invalid email format"
+    
+    # Check minimum length requirements
+    if len(email) < 6:
+        return False, "Email is too short"
+    
+    # Extract domain from email
+    try:
+        domain = email.split('@')[1]
+    except IndexError:
+        return False, "Invalid email format"
+    
+    # Check if domain has at least one dot
+    if '.' not in domain:
+        return False, "Invalid email domain"
+    
+    # Check against blocked disposable email domains
+    if domain in BLOCKED_EMAIL_DOMAINS:
+        return False, "Disposable/temporary emails are not allowed. Please use a real email address."
+    
+    return True, "Valid email"
+
+
 # Use /tmp for instance folder (writable in serverless environments)
 app = Flask(__name__, instance_path='/tmp')
 app.config.from_object(Config)
@@ -573,9 +622,15 @@ def voter_register():
     if request.method == 'POST':
         voter_id = request.form.get('voter_id')
         name = request.form.get('name')
-        email = request.form.get('email')
+        email = request.form.get('email', '').strip().lower()
         password = request.form.get('password')
         college_code = request.form.get('college_code')
+        
+        # Validate email format and check for disposable emails
+        is_valid, email_error = is_valid_email(email)
+        if not is_valid:
+            flash(email_error, 'danger')
+            return redirect(url_for('voter_register'))
         
         # Check if college exists
         college = College.query.filter_by(college_code=college_code).first()

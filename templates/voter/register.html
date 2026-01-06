@@ -44,8 +44,12 @@
                         <label for="email" class="form-label">Email Address *</label>
                         <div class="input-group">
                             <span class="input-group-text"><i class="fas fa-envelope"></i></span>
-                            <input type="email" class="form-control" id="email" name="email" placeholder="e.g., john.doe@college.edu" required>
+                            <input type="email" class="form-control" id="email" name="email" 
+                                   placeholder="e.g., john.doe@college.edu" required
+                                   pattern="[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$">
                         </div>
+                        <small class="form-text text-muted">Use your real email address (no temporary/disposable emails)</small>
+                        <div id="emailFeedback" class="invalid-feedback"></div>
                     </div>
                     
                     <div class="mb-4">
@@ -68,4 +72,78 @@
         </div>
     </div>
 </div>
+
+<script>
+// Blocked disposable email domains (client-side check)
+const blockedDomains = [
+    'tempmail.com', 'temp-mail.org', 'guerrillamail.com', 'guerrillamail.org',
+    'mailinator.com', 'throwaway.email', 'fakeinbox.com', 'trashmail.com',
+    'yopmail.com', 'sharklasers.com', 'guerrillamail.info', 'grr.la',
+    'mailnesia.com', 'mytemp.email', 'tempmailaddress.com', 'throwawaymail.com',
+    'getnada.com', 'tempail.com', 'emailondeck.com', 'mohmal.com',
+    '10minutemail.com', '10minutemail.net', 'minutemail.com', 'tempinbox.com',
+    'discard.email', 'mailcatch.com', 'mailsac.com', 'maildrop.cc'
+];
+
+const emailInput = document.getElementById('email');
+const emailFeedback = document.getElementById('emailFeedback');
+const form = document.querySelector('form');
+
+function validateEmail(email) {
+    email = email.trim().toLowerCase();
+    
+    // Basic format check
+    const emailPattern = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    if (!emailPattern.test(email)) {
+        return { valid: false, message: 'Please enter a valid email address' };
+    }
+    
+    // Extract domain
+    const domain = email.split('@')[1];
+    
+    // Check blocked domains
+    if (blockedDomains.includes(domain)) {
+        return { valid: false, message: 'Disposable/temporary emails are not allowed' };
+    }
+    
+    return { valid: true, message: '' };
+}
+
+emailInput.addEventListener('blur', function() {
+    const result = validateEmail(this.value);
+    
+    if (!result.valid && this.value.length > 0) {
+        this.classList.add('is-invalid');
+        this.classList.remove('is-valid');
+        emailFeedback.textContent = result.message;
+        emailFeedback.style.display = 'block';
+    } else if (this.value.length > 0) {
+        this.classList.remove('is-invalid');
+        this.classList.add('is-valid');
+        emailFeedback.style.display = 'none';
+    }
+});
+
+emailInput.addEventListener('input', function() {
+    if (this.classList.contains('is-invalid')) {
+        const result = validateEmail(this.value);
+        if (result.valid) {
+            this.classList.remove('is-invalid');
+            this.classList.add('is-valid');
+            emailFeedback.style.display = 'none';
+        }
+    }
+});
+
+form.addEventListener('submit', function(e) {
+    const result = validateEmail(emailInput.value);
+    if (!result.valid) {
+        e.preventDefault();
+        emailInput.classList.add('is-invalid');
+        emailFeedback.textContent = result.message;
+        emailFeedback.style.display = 'block';
+        emailInput.focus();
+    }
+});
+</script>
 {% endblock %}
