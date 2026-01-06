@@ -1,0 +1,135 @@
+{% extends 'base.html' %}
+
+{% block title %}Manage Voters{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="fas fa-users"></i> Manage Voters</h2>
+    <a href="{{ url_for('admin_dashboard') }}" class="btn btn-outline-secondary">
+        <i class="fas fa-arrow-left"></i> Back to Dashboard
+    </a>
+</div>
+
+<div class="card">
+    <div class="card-header bg-white">
+        <div class="row align-items-center">
+            <div class="col-md-6">
+                <h5 class="mb-0">Registered Voters ({{ voters|length }})</h5>
+            </div>
+            <div class="col-md-6">
+                <input type="text" id="searchVoters" class="form-control" placeholder="Search by name, email, or voter ID...">
+            </div>
+        </div>
+    </div>
+    <div class="card-body">
+        {% if voters %}
+            <div class="table-responsive">
+                <table class="table table-hover" id="votersTable">
+                    <thead class="table-light">
+                        <tr>
+                            <th>#</th>
+                            <th>Voter ID</th>
+                            <th>Name</th>
+                            <th>Email</th>
+                            <th>College</th>
+                            <th>Registered</th>
+                            <th>Votes Cast</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for voter in voters %}
+                        <tr>
+                            <td>{{ loop.index }}</td>
+                            <td><code>{{ voter.voter_id }}</code></td>
+                            <td><strong>{{ voter.name }}</strong></td>
+                            <td>
+                                <span class="{% if '@' not in voter.email or '.' not in voter.email.split('@')[1] if '@' in voter.email else true %}text-danger{% endif %}">
+                                    {{ voter.email }}
+                                </span>
+                                {% if '@' not in voter.email or ('.' not in voter.email.split('@')[1] if '@' in voter.email else true) %}
+                                    <span class="badge bg-warning text-dark ms-1" title="Possibly invalid email">
+                                        <i class="fas fa-exclamation-triangle"></i>
+                                    </span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <span class="badge bg-info">{{ voter.college_code }}</span>
+                            </td>
+                            <td>{{ voter.created_at.strftime('%Y-%m-%d %H:%M') if voter.created_at else 'N/A' }}</td>
+                            <td>
+                                <span class="badge bg-secondary">{{ voter.votes|length }}</span>
+                            </td>
+                            <td>
+                                <button type="button" class="btn btn-sm btn-danger" 
+                                        data-bs-toggle="modal" 
+                                        data-bs-target="#deleteModal{{ voter.id }}"
+                                        title="Delete Voter">
+                                    <i class="fas fa-trash"></i> Delete
+                                </button>
+                                
+                                <!-- Delete Confirmation Modal -->
+                                <div class="modal fade" id="deleteModal{{ voter.id }}" tabindex="-1" aria-hidden="true">
+                                    <div class="modal-dialog">
+                                        <div class="modal-content">
+                                            <div class="modal-header bg-danger text-white">
+                                                <h5 class="modal-title">
+                                                    <i class="fas fa-exclamation-triangle"></i> Confirm Delete
+                                                </h5>
+                                                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                                            </div>
+                                            <div class="modal-body">
+                                                <p>Are you sure you want to delete this voter?</p>
+                                                <div class="alert alert-warning">
+                                                    <strong>Voter Details:</strong><br>
+                                                    <i class="fas fa-user"></i> Name: {{ voter.name }}<br>
+                                                    <i class="fas fa-id-card"></i> Voter ID: {{ voter.voter_id }}<br>
+                                                    <i class="fas fa-envelope"></i> Email: {{ voter.email }}<br>
+                                                    <i class="fas fa-vote-yea"></i> Votes Cast: {{ voter.votes|length }}
+                                                </div>
+                                                <p class="text-danger mb-0">
+                                                    <strong>Warning:</strong> This action cannot be undone. 
+                                                    {% if voter.votes|length > 0 %}
+                                                    All {{ voter.votes|length }} vote(s) by this voter will also be deleted.
+                                                    {% endif %}
+                                                </p>
+                                            </div>
+                                            <div class="modal-footer">
+                                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                                                <form method="POST" action="{{ url_for('delete_voter', voter_id=voter.id) }}" class="d-inline">
+                                                    <button type="submit" class="btn btn-danger">
+                                                        <i class="fas fa-trash"></i> Delete Voter
+                                                    </button>
+                                                </form>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <div class="text-center text-muted py-5">
+                <i class="fas fa-users fa-3x mb-3"></i>
+                <p>No voters registered yet.</p>
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+// Search functionality
+document.getElementById('searchVoters').addEventListener('keyup', function() {
+    const searchTerm = this.value.toLowerCase();
+    const rows = document.querySelectorAll('#votersTable tbody tr');
+    
+    rows.forEach(row => {
+        const text = row.textContent.toLowerCase();
+        row.style.display = text.includes(searchTerm) ? '' : 'none';
+    });
+});
+</script>
+{% endblock %}

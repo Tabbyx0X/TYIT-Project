@@ -838,6 +838,46 @@ def add_teacher():
     return redirect(url_for('manage_teachers'))
 
 
+# ==================== Voter Management ====================
+
+@app.route('/admin/voters', methods=['GET'])
+@login_required
+def manage_voters():
+    """View and manage registered voters"""
+    if current_user.is_super_admin():
+        voters = Voter.query.order_by(Voter.created_at.desc()).all()
+        colleges = College.query.all()
+    else:
+        # Teachers can only see voters from their college
+        voters = Voter.query.filter_by(college_code=current_user.college_code).order_by(Voter.created_at.desc()).all()
+        colleges = []
+    
+    return render_template('admin/voters.html', voters=voters, colleges=colleges)
+
+
+@app.route('/admin/voters/<int:voter_id>/delete', methods=['POST'])
+@login_required
+def delete_voter(voter_id):
+    """Delete a voter account"""
+    voter = Voter.query.get_or_404(voter_id)
+    
+    # Teachers can only delete voters from their college
+    if not current_user.is_super_admin() and voter.college_code != current_user.college_code:
+        flash('Access denied! You can only delete voters from your college.', 'danger')
+        return redirect(url_for('manage_voters'))
+    
+    voter_name = voter.name
+    voter_email = voter.email
+    
+    # Delete associated votes first (cascade should handle this, but being explicit)
+    Vote.query.filter_by(voter_id=voter.id).delete()
+    
+    db.session.delete(voter)
+    db.session.commit()
+    flash(f'Voter "{voter_name}" ({voter_email}) deleted successfully!', 'success')
+    return redirect(url_for('manage_voters'))
+
+
 # ==================== Database Viewer ====================
 
 @app.route('/admin/database')
