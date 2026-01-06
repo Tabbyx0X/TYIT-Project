@@ -43,9 +43,7 @@
                             <td>{{ loop.index }}</td>
                             <td><code>{{ voter.voter_id }}</code></td>
                             <td><strong>{{ voter.name }}</strong></td>
-                            <td>
-                                {{ voter.email }}
-                            </td>
+                            <td>{{ voter.email }}</td>
                             <td>
                                 <span class="badge bg-info">{{ voter.college_code }}</span>
                             </td>
@@ -55,49 +53,10 @@
                             </td>
                             <td>
                                 <button type="button" class="btn btn-sm btn-danger" 
-                                        data-bs-toggle="modal" 
-                                        data-bs-target="#deleteModal{{ voter.id }}"
+                                        onclick="showDeleteModal('{{ voter.id }}', '{{ voter.name }}', '{{ voter.voter_id }}', '{{ voter.email }}', '{{ voter.votes|length }}')"
                                         title="Delete Voter">
                                     <i class="fas fa-trash"></i> Delete
                                 </button>
-                                
-                                <!-- Delete Confirmation Modal -->
-                                <div class="modal fade" id="deleteModal{{ voter.id }}" tabindex="-1" aria-hidden="true">
-                                    <div class="modal-dialog">
-                                        <div class="modal-content">
-                                            <div class="modal-header bg-danger text-white">
-                                                <h5 class="modal-title">
-                                                    <i class="fas fa-exclamation-triangle"></i> Confirm Delete
-                                                </h5>
-                                                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
-                                            </div>
-                                            <div class="modal-body">
-                                                <p>Are you sure you want to delete this voter?</p>
-                                                <div class="alert alert-warning">
-                                                    <strong>Voter Details:</strong><br>
-                                                    <i class="fas fa-user"></i> Name: {{ voter.name }}<br>
-                                                    <i class="fas fa-id-card"></i> Voter ID: {{ voter.voter_id }}<br>
-                                                    <i class="fas fa-envelope"></i> Email: {{ voter.email }}<br>
-                                                    <i class="fas fa-vote-yea"></i> Votes Cast: {{ voter.votes|length }}
-                                                </div>
-                                                <p class="text-danger mb-0">
-                                                    <strong>Warning:</strong> This action cannot be undone. 
-                                                    {% if voter.votes|length > 0 %}
-                                                    All {{ voter.votes|length }} vote(s) by this voter will also be deleted.
-                                                    {% endif %}
-                                                </p>
-                                            </div>
-                                            <div class="modal-footer">
-                                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                                                <form method="POST" action="{{ url_for('delete_voter', voter_id=voter.id) }}" class="d-inline">
-                                                    <button type="submit" class="btn btn-danger">
-                                                        <i class="fas fa-trash"></i> Delete Voter
-                                                    </button>
-                                                </form>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
                             </td>
                         </tr>
                         {% endfor %}
@@ -113,6 +72,41 @@
     </div>
 </div>
 
+<!-- Single Delete Confirmation Modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title">
+                    <i class="fas fa-exclamation-triangle"></i> Confirm Delete
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete this voter?</p>
+                <div class="alert alert-warning">
+                    <strong>Voter Details:</strong><br>
+                    <i class="fas fa-user"></i> Name: <span id="modalVoterName"></span><br>
+                    <i class="fas fa-id-card"></i> Voter ID: <span id="modalVoterId"></span><br>
+                    <i class="fas fa-envelope"></i> Email: <span id="modalVoterEmail"></span><br>
+                    <i class="fas fa-vote-yea"></i> Votes Cast: <span id="modalVotesCount"></span>
+                </div>
+                <p class="text-danger mb-0">
+                    <strong>Warning:</strong> This action cannot be undone.
+                </p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <form id="deleteForm" method="POST" class="d-inline">
+                    <button type="submit" class="btn btn-danger">
+                        <i class="fas fa-trash"></i> Delete Voter
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
 // Search functionality
 document.getElementById('searchVoters').addEventListener('keyup', function() {
@@ -124,5 +118,17 @@ document.getElementById('searchVoters').addEventListener('keyup', function() {
         row.style.display = text.includes(searchTerm) ? '' : 'none';
     });
 });
+
+// Show delete modal with voter details
+function showDeleteModal(voterId, name, visibleId, email, votesCount) {
+    document.getElementById('modalVoterName').textContent = name;
+    document.getElementById('modalVoterId').textContent = visibleId;
+    document.getElementById('modalVoterEmail').textContent = email;
+    document.getElementById('modalVotesCount').textContent = votesCount;
+    document.getElementById('deleteForm').action = '/admin/voters/' + voterId + '/delete';
+    
+    const modal = new bootstrap.Modal(document.getElementById('deleteModal'));
+    modal.show();
+}
 </script>
 {% endblock %}
