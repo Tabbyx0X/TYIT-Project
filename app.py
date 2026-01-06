@@ -2,6 +2,7 @@ from flask import Flask, render_template, request, redirect, url_for, flash, jso
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
+from sqlalchemy.orm import joinedload
 from datetime import datetime, timedelta
 from config import Config
 import os
@@ -11,9 +12,10 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
 import re
+from functools import lru_cache
 
-# List of known disposable/temporary email domains to block
-BLOCKED_EMAIL_DOMAINS = [
+# Set for O(1) lookup of blocked disposable email domains
+BLOCKED_EMAIL_DOMAINS = frozenset({
     'tempmail.com', 'temp-mail.org', 'guerrillamail.com', 'guerrillamail.org',
     'mailinator.com', 'throwaway.email', 'fakeinbox.com', 'trashmail.com',
     'yopmail.com', 'sharklasers.com', 'guerrillamail.info', 'grr.la',
@@ -24,37 +26,27 @@ BLOCKED_EMAIL_DOMAINS = [
     'maildrop.cc', 'getairmail.com', 'fakemailgenerator.com', 'emailfake.com',
     'crazymailing.com', 'tempmailo.com', 'tempr.email', 'dispostable.com',
     'mailnull.com', 'spamfree24.org', 'binkmail.com', 'safetymail.info'
-]
+})
 
+# Pre-compile regex for better performance
+EMAIL_PATTERN = re.compile(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$')
+
+@lru_cache(maxsize=256)
 def is_valid_email(email):
-    """Validate email format and check against blocked domains"""
-    if not email:
-        return False, "Email is required"
+    """Validate email format and check against blocked domains (cached)"""
+    if not email or len(email) < 6:
+        return False, "Email is required" if not email else "Email is too short"
     
     email = email.strip().lower()
     
-    # Basic email format validation using regex
-    email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
-    if not re.match(email_pattern, email):
+    # Fast regex check with pre-compiled pattern
+    if not EMAIL_PATTERN.match(email):
         return False, "Invalid email format"
     
-    # Check minimum length requirements
-    if len(email) < 6:
-        return False, "Email is too short"
-    
-    # Extract domain from email
-    try:
-        domain = email.split('@')[1]
-    except IndexError:
-        return False, "Invalid email format"
-    
-    # Check if domain has at least one dot
-    if '.' not in domain:
-        return False, "Invalid email domain"
-    
-    # Check against blocked disposable email domains
-    if domain in BLOCKED_EMAIL_DOMAINS:
-        return False, "Disposable/temporary emails are not allowed. Please use a real email address."
+    # Extract and validate domain
+    domain = email.rsplit('@', 1)[-1]
+    if '.' not in domain or domain in BLOCKED_EMAIL_DOMAINS:
+        return (False, "Invalid email domain") if '.' not in domain else (False, "Disposable/temporary emails are not allowed.")
     
     return True, "Valid email"
 
@@ -900,11 +892,12 @@ def add_teacher():
 def manage_voters():
     """View and manage registered voters"""
     if current_user.is_super_admin():
-        voters = Voter.query.order_by(Voter.created_at.desc()).all()
+        # Use joinedload for eager loading to avoid N+1 queries
+        voters = Voter.query.options(joinedload(Voter.votes)).order_by(Voter.created_at.desc()).all()
         colleges = College.query.all()
     else:
         # Teachers can only see voters from their college
-        voters = Voter.query.filter_by(college_code=current_user.college_code).order_by(Voter.created_at.desc()).all()
+        voters = Voter.query.options(joinedload(Voter.votes)).filter_by(college_code=current_user.college_code).order_by(Voter.created_at.desc()).all()
         colleges = []
     
     return render_template('admin/voters.html', voters=voters, colleges=colleges)

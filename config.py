@@ -31,10 +31,17 @@ class Config:
     # Optimized for Neon Pooler + Serverless
     SQLALCHEMY_ENGINE_OPTIONS = {
         'pool_pre_ping': True,
-        'pool_size': 1,
-        'max_overflow': 0,
-        'pool_recycle': 60,
+        'pool_size': 2,
+        'max_overflow': 3,
+        'pool_recycle': 300,
+        'pool_timeout': 20,
         'connect_args': {
-            'connect_timeout': 10
+            'connect_timeout': 10,
+            'application_name': 'voting_system'
         }
     }
+    
+    # Session configuration
+    SESSION_COOKIE_SECURE = True
+    SESSION_COOKIE_HTTPONLY = True
+    SESSION_COOKIE_SAMESITE = 'Lax'
