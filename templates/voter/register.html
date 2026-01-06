@@ -13,7 +13,8 @@
                     <p class="text-muted">Create an account to vote</p>
                 </div>
                 
-                <form method="POST">
+                <form method="POST" id="registerForm">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                     <div class="mb-3">
                         <label for="college_code" class="form-label">College Code *</label>
                         <div class="input-group">
@@ -56,8 +57,11 @@
                         <label for="password" class="form-label">Password *</label>
                         <div class="input-group">
                             <span class="input-group-text"><i class="fas fa-lock"></i></span>
-                            <input type="password" class="form-control" id="password" name="password" placeholder="Enter a strong password" required>
+                            <input type="password" class="form-control" id="password" name="password" 
+                                   placeholder="Min 8 chars, 1 uppercase, 1 number" required minlength="8">
                         </div>
+                        <small class="form-text text-muted">Min 8 characters with uppercase, lowercase, and number</small>
+                        <div id="passwordFeedback" class="invalid-feedback"></div>
                     </div>
                     
                     <button type="submit" class="btn btn-primary w-100 mb-3">
@@ -135,14 +139,71 @@ emailInput.addEventListener('input', function() {
     }
 });
 
+// Password validation
+const passwordInput = document.getElementById('password');
+const passwordFeedback = document.getElementById('passwordFeedback');
+
+function validatePassword(password) {
+    if (password.length < 8) {
+        return { valid: false, message: 'Password must be at least 8 characters' };
+    }
+    if (!/[A-Z]/.test(password)) {
+        return { valid: false, message: 'Password must contain at least one uppercase letter' };
+    }
+    if (!/[a-z]/.test(password)) {
+        return { valid: false, message: 'Password must contain at least one lowercase letter' };
+    }
+    if (!/[0-9]/.test(password)) {
+        return { valid: false, message: 'Password must contain at least one number' };
+    }
+    return { valid: true, message: '' };
+}
+
+passwordInput.addEventListener('blur', function() {
+    const result = validatePassword(this.value);
+    if (!result.valid && this.value.length > 0) {
+        this.classList.add('is-invalid');
+        this.classList.remove('is-valid');
+        passwordFeedback.textContent = result.message;
+        passwordFeedback.style.display = 'block';
+    } else if (this.value.length > 0) {
+        this.classList.remove('is-invalid');
+        this.classList.add('is-valid');
+        passwordFeedback.style.display = 'none';
+    }
+});
+
+passwordInput.addEventListener('input', function() {
+    if (this.classList.contains('is-invalid')) {
+        const result = validatePassword(this.value);
+        if (result.valid) {
+            this.classList.remove('is-invalid');
+            this.classList.add('is-valid');
+            passwordFeedback.style.display = 'none';
+        }
+    }
+});
+
+const form = document.getElementById('registerForm');
 form.addEventListener('submit', function(e) {
-    const result = validateEmail(emailInput.value);
-    if (!result.valid) {
+    const emailResult = validateEmail(emailInput.value);
+    const passwordResult = validatePassword(passwordInput.value);
+    
+    if (!emailResult.valid) {
         e.preventDefault();
         emailInput.classList.add('is-invalid');
-        emailFeedback.textContent = result.message;
+        emailFeedback.textContent = emailResult.message;
         emailFeedback.style.display = 'block';
         emailInput.focus();
+        return;
+    }
+    
+    if (!passwordResult.valid) {
+        e.preventDefault();
+        passwordInput.classList.add('is-invalid');
+        passwordFeedback.textContent = passwordResult.message;
+        passwordFeedback.style.display = 'block';
+        passwordInput.focus();
     }
 });
 </script>

@@ -1,6 +1,9 @@
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, session
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
+from flask_wtf.csrf import CSRFProtect
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 from werkzeug.security import generate_password_hash, check_password_hash
 from sqlalchemy.orm import joinedload
 from datetime import datetime, timedelta
@@ -8,6 +11,7 @@ from config import Config
 import os
 import secrets
 import smtplib
+import bleach
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
@@ -51,14 +55,68 @@ def is_valid_email(email):
     return True, "Valid email"
 
 
+# Password strength validation
+def is_strong_password(password):
+    """Check password strength: min 8 chars, 1 uppercase, 1 lowercase, 1 digit"""
+    if not password or len(password) < 8:
+        return False, "Password must be at least 8 characters long"
+    if not any(c.isupper() for c in password):
+        return False, "Password must contain at least one uppercase letter"
+    if not any(c.islower() for c in password):
+        return False, "Password must contain at least one lowercase letter"
+    if not any(c.isdigit() for c in password):
+        return False, "Password must contain at least one number"
+    return True, "Strong password"
+
+
+# Input sanitization
+def sanitize_input(text):
+    """Sanitize user input to prevent XSS"""
+    if text is None:
+        return None
+    return bleach.clean(str(text).strip(), tags=[], strip=True)
+
+
 # Use /tmp for instance folder (writable in serverless environments)
 app = Flask(__name__, instance_path='/tmp')
 app.config.from_object(Config)
 
+# Initialize extensions
 db = SQLAlchemy(app)
+
+# CSRF Protection
+csrf = CSRFProtect(app)
+
+# Rate Limiting (uses in-memory storage - for production use Redis)
+limiter = Limiter(
+    key_func=get_remote_address,
+    app=app,
+    default_limits=["200 per day", "50 per hour"],
+    storage_uri="memory://",
+)
+
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
+
+# Security headers middleware
+@app.after_request
+def add_security_headers(response):
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.headers['X-Frame-Options'] = 'SAMEORIGIN'
+    response.headers['X-XSS-Protection'] = '1; mode=block'
+    response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+    response.headers['Permissions-Policy'] = 'geolocation=(), microphone=(), camera=()'
+    # CSP - allow Bootstrap and FontAwesome CDNs
+    response.headers['Content-Security-Policy'] = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+        "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+        "font-src 'self' https://cdn.jsdelivr.net; "
+        "img-src 'self' data: https:; "
+        "connect-src 'self';"
+    )
+    return response
 
 # ==================== Models ====================
 
@@ -335,6 +393,7 @@ def index():
 
 
 @app.route('/admin/login', methods=['GET', 'POST'])
+@limiter.limit("5 per minute", error_message="Too many login attempts. Please wait a minute.")
 def login():
     # Check if admin access is verified
     if not session.get('admin_access_verified'):
@@ -610,13 +669,20 @@ def api_results(election_id):
 
 
 @app.route('/voter/register', methods=['GET', 'POST'])
+@limiter.limit("10 per hour", error_message="Too many registration attempts. Please try again later.")
 def voter_register():
     if request.method == 'POST':
-        voter_id = request.form.get('voter_id')
-        name = request.form.get('name')
+        voter_id = sanitize_input(request.form.get('voter_id'))
+        name = sanitize_input(request.form.get('name'))
         email = request.form.get('email', '').strip().lower()
         password = request.form.get('password')
-        college_code = request.form.get('college_code')
+        college_code = sanitize_input(request.form.get('college_code'))
+        
+        # Validate password strength
+        is_strong, password_error = is_strong_password(password)
+        if not is_strong:
+            flash(password_error, 'danger')
+            return redirect(url_for('voter_register'))
         
         # Validate email format and check for disposable emails
         is_valid, email_error = is_valid_email(email)
@@ -652,11 +718,12 @@ def voter_register():
 
 
 @app.route('/voter/login', methods=['GET', 'POST'])
+@limiter.limit("5 per minute", error_message="Too many login attempts. Please wait a minute.")
 def voter_login():
     if request.method == 'POST':
-        voter_id = request.form.get('voter_id')
+        voter_id = sanitize_input(request.form.get('voter_id'))
         password = request.form.get('password')
-        college_code = request.form.get('college_code')
+        college_code = sanitize_input(request.form.get('college_code'))
         
         voter = Voter.query.filter_by(voter_id=voter_id, college_code=college_code).first()
         
