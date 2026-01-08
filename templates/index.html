@@ -3,16 +3,16 @@
 {% block title %}Home - Online Voting System{% endblock %}
 
 {% block content %}
-<div class="jumbotron bg-white p-5 rounded-3 mb-4">
+<div class="jumbotron bg-white p-3 p-md-5 rounded-3 mb-4">
     <div class="text-center">
-        <h1 class="display-4 fw-bold text-primary">
-            <i class="fas fa-vote-yea"></i> Welcome to Online Voting System
+        <h1 class="display-5 display-md-4 fw-bold text-primary">
+            <i class="fas fa-vote-yea"></i> Welcome to<br class="d-md-none"> Online Voting System
         </h1>
         <p class="lead mt-3">Secure, Transparent, and Democratic Voting Platform</p>
-        <hr class="my-4">
-        <p>Cast your vote from anywhere, anytime. Make your voice heard in upcoming elections.</p>
-        <div class="mt-4">
-            <a class="btn btn-primary btn-lg me-2" href="{{ url_for('voter_register') }}">
+        <hr class="my-3 my-md-4">
+        <p class="px-2">Cast your vote from anywhere, anytime. Make your voice heard in upcoming elections.</p>
+        <div class="mt-4 d-flex flex-column flex-sm-row justify-content-center gap-2 gap-sm-3">
+            <a class="btn btn-primary btn-lg" href="{{ url_for('voter_register') }}">
                 <i class="fas fa-user-plus"></i> Register to Vote
             </a>
             <a class="btn btn-outline-primary btn-lg" href="{{ url_for('voter_login') }}">

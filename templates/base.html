@@ -80,6 +80,50 @@
             color: white;
             margin-top: 4rem;
         }
+        
+        /* Mobile Responsive Fixes */
+        @media (max-width: 576px) {
+            .navbar-brand {
+                font-size: 1.1rem;
+            }
+            
+            .display-5 {
+                font-size: 1.75rem;
+            }
+            
+            .btn-lg {
+                padding: 0.75rem 1.5rem;
+                font-size: 1rem;
+            }
+            
+            .jumbotron {
+                padding: 1.5rem !important;
+            }
+            
+            .card-body {
+                padding: 1rem;
+            }
+            
+            .status-badge {
+                padding: 0.35rem 0.7rem;
+                font-size: 0.75rem;
+            }
+            
+            h2 {
+                font-size: 1.5rem;
+            }
+            
+            .container {
+                padding-left: 12px;
+                padding-right: 12px;
+            }
+        }
+        
+        @media (max-width: 768px) {
+            .card:hover {
+                transform: none;
+            }
+        }
     </style>
     {% block extra_css %}{% endblock %}
 </head>
